@@ -1,0 +1,21 @@
+[package]
+name = "rcr"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+crossbeam = "0.8"
+
+[dev-dependencies]
+criterion = { version = "0.6.0", features = ["html_reports"] }  # For benchmarking
+
+[[bench]]
+name = "benches"
+harness = false  # Use Criterion's harness
+
+[profile.release]
+debug = true  # Enable debug symbols for profiling in release mode (no perf hit)
+
+[profile.bench]
+debug = true  # Same for benchmarks
