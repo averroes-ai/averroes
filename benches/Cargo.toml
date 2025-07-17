@@ -1,0 +1,18 @@
+[package]
+name = "package-benches"
+repository.workspace = true
+license.workspace = true
+edition.workspace = true
+workspace = ".."
+
+[dev-dependencies]
+criterion.workspace = true
+package-core = { path = "../core" }
+
+[[bench]]
+name = "benches"
+path = "src/benches.rs"
+harness = false
+
+[lints]
+workspace = true

@@ -382,6 +382,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6790f58c7ff633d8771f42965289203411a5e5c68388703c06e14f24770b41e"
 
 [[package]]
+name = "package-benches"
+version = "0.0.0"
+dependencies = [
+ "criterion",
+ "package-core",
+]
+
+[[package]]
+name = "package-bin"
+version = "0.0.0"
+dependencies = [
+ "package-core",
+]
+
+[[package]]
+name = "package-core"
+version = "0.0.0"
+dependencies = [
+ "crossbeam",
+ "tokio",
+]
+
+[[package]]
 name = "parking_lot"
 version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -474,15 +497,6 @@ checksum = "1465873a3dfdaa8ae7cb14b4383657caab0b3e8a0aa9ae8e04b044854c8dfce2"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
-]
-
-[[package]]
-name = "rcr"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "crossbeam",
- "tokio",
 ]
 
 [[package]]

@@ -1,0 +1,12 @@
+[package]
+name = "package-bin"
+repository.workspace = true
+license.workspace = true
+edition.workspace = true
+workspace = ".."
+
+[dependencies]
+package-core = { path = "../core" }
+
+[lints]
+workspace = true
