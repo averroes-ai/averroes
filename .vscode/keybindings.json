@@ -1,0 +1,54 @@
+[
+    // Task Bindings (Run via workbench.action.tasks.runTask)
+    // For macOS: Replace "ctrl" with "cmd", "alt" with "option".
+    // don't forget to alter and put it to global keybindings 
+    // in your VSCode settings.json
+
+    {
+        "key": "ctrl+shift+b",
+        "command": "workbench.action.tasks.runTask",
+        "args": "Cargo: Build",
+        "when": "editorLangId == rust"
+    },
+    {
+        "key": "ctrl+alt+a",
+        "command": "workbench.action.tasks.runTask",
+        "args": "Cargo: Test All"
+    },
+    {
+        "key": "ctrl+alt+t",
+        "command": "workbench.action.tasks.runTask",
+        "args": "Cargo: Test Core"
+    },
+    {
+        "key": "ctrl+alt+b",
+        "command": "workbench.action.tasks.runTask",
+        "args": "Cargo: Bench"
+    },
+    {
+        "key": "ctrl+alt+l",
+        "command": "workbench.action.tasks.runTask",
+        "args": "Cargo: Clippy"
+    },
+    {
+        "key": "ctrl+alt+f",
+        "command": "workbench.action.tasks.runTask",
+        "args": "Cargo: Flamegraph"
+    },
+    // Debug Launch Bindings (Run specific configs)
+    {
+        "key": "ctrl+f5",
+        "command": "workbench.action.debug.selectAndStart",
+        "args": "Debug Binary (Release)"
+    },
+    {
+        "key": "ctrl+f6",
+        "command": "workbench.action.debug.selectAndStart",
+        "args": "Debug Unit Tests (Core)"
+    },
+    {
+        "key": "ctrl+f7",
+        "command": "workbench.action.debug.selectAndStart",
+        "args": "Debug Integration Tests (Core)"
+    }
+]

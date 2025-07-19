@@ -1,0 +1,53 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Cargo: Build",
+            "type": "shell",
+            "command": "cargo",
+            "args": ["build", "--release"],
+            "group": "build",
+            "problemMatcher": ["$rustc"]
+        },
+        {
+            "label": "Cargo: Test All",
+            "type": "shell",
+            "command": "cargo",
+            "args": ["test"],
+            "group": "test",
+            "problemMatcher": ["$rustc"]
+        },
+        {
+            "label": "Cargo: Test Core",
+            "type": "shell",
+            "command": "cargo",
+            "args": ["test", "-p", "package-core"],
+            "group": "test",
+            "problemMatcher": ["$rustc"]
+        },
+        {
+            "label": "Cargo: Bench",
+            "type": "shell",
+            "command": "cargo",
+            "args": ["bench", "-p", "package-benches"],
+            "group": "test",
+            "problemMatcher": ["$rustc"]
+        },
+        {
+            "label": "Cargo: Clippy",
+            "type": "shell",
+            "command": "cargo",
+            "args": ["clippy", "--all-targets", "--", "-D", "warnings"],
+            "group": "test",
+            "problemMatcher": ["$rustc"]
+        },
+        {
+            "label": "Cargo: Flamegraph",
+            "type": "shell",
+            "command": "cargo",
+            "args": ["flamegraph", "-p", "package-bin"],
+            "group": "test",
+            "problemMatcher": ["$rustc"]
+        }
+    ]
+}

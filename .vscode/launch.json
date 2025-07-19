@@ -1,0 +1,38 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug Binary (Release)",
+            "cargo": {
+                "args": ["build", "--bin=package-bin", "--release"]
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "program": "${workspaceFolder}/target/release/package-bin"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug Unit Tests (Core)",
+            "cargo": {
+                "args": ["test", "--no-run", "--lib", "-p=package-core", "--release"]
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "program": "${workspaceFolder}/target/release/deps/perf_core-somehash"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug Integration Tests (Core)",
+            "cargo": {
+                "args": ["test", "--no-run", "--test=integration", "-p=package-core", "--release"]
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "program": "${workspaceFolder}/target/release/deps/integration-somehash"
+        }
+    ]
+}
