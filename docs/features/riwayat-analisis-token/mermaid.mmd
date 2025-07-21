@@ -1,0 +1,40 @@
+stateDiagram-v2
+    [*] --> MainMenu
+    MainMenu --> TokenSelection: User selects "History Analysis"
+    
+    state TokenSelection {
+        [*] --> SearchInput
+        SearchInput --> ShowSuggestions: Real-time API lookup
+        ShowSuggestions --> TokenSelected: User picks token
+    }
+    
+    TokenSelected --> FetchData: Query database
+    
+    state FetchData {
+        [*] --> CheckLocalCache
+        CheckLocalCache --> HasLocalData: Cache exists
+        CheckLocalCache --> QueryBlockchain: Needs fresh data
+        QueryBlockchain --> SolanaRPC: Get SPL token metadata
+    }
+    
+    HasLocalData --> RenderTimeline
+    SolanaRPC --> RenderTimeline
+    
+    state RenderTimeline {
+        [*] --> DisplayPeriods
+        DisplayPeriods --> HighlightChanges: Color-coded status transitions
+        HighlightChanges --> AttachSources: Fatwa/audit references
+    }
+    
+    AttachSources --> FilterOptions
+    
+    state FilterOptions {
+        [*] --> DateRange
+        DateRange --> ShariaStatus: Halal/Haram/Greyzone
+        ShariaStatus --> ApplyFilters
+    }
+    
+    ApplyFilters --> GenerateReport: PDF/CSV export
+    GenerateReport --> [*]
+    ApplyFilters --> ReturnToMenu: Back navigation
+    ReturnToMenu --> MainMenu
