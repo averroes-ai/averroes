@@ -1,0 +1,14 @@
+stateDiagram-v2
+    [*] --> WaitingForAudio
+    WaitingForAudio --> AudioProcessing: Voice received
+    AudioProcessing --> Conversion: Speech-to-text
+    
+    state Conversion {
+        [*] --> Converting
+        Converting --> TextReady: Success
+        Converting --> ConversionFailed: Poor quality
+    }
+    
+    TextReady --> TextAnalysis: Proceed to text flow
+    ConversionFailed --> AudioReprompt: Ask to re-record
+    AudioReprompt --> WaitingForAudio

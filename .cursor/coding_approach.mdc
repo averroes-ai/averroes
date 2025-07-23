@@ -1,0 +1,54 @@
+---
+alwaysApply: false
+---
+
+Step-by-Step Coding Approach
+
+- Setup Monorepo & Core Crate:
+
+1. Init repo: cargo new fiqhai --bin (convert to workspace).
+2. Edit root Cargo.toml: Add workspace members.
+3. Create crates/core: cargo new --lib crates/core.
+4. Add deps: cargo add tokio rig langchain-rs qdrant solana-sdk reqwest serde axum uniffi --features=uniffi/tokio.
+5. Generate UniFFI scaffolding: Add uniffi.toml and define interfaces in lib.rs (e.g., fn analyze_token(ticker: String) -> String).
+
+- Implement Actors:
+
+1. In `crates/core/src/actors/`: Define actor structs with Tokio spawns (per blog: use mpsc::Sender for messages).
+2. Example: QueryActor handles user prompts, forwards to AnalyzerActor.
+3. Test: Mock channels, assert message flow.
+
+- AI Components:
+
+1. Setup qdrant client for vector storage (e.g., embed fatwas).
+2. Build langchain chains: Input → Scrape → Vector Search → Rig Analysis → Output.
+3. Integrate Solana: Use solana-\* library to fetch token metadata by address.
+
+- API Implementation:
+
+1. In `crates/core/src/api/`: Axum router for endpoints.
+2. Expose via backend crate's main.rs.
+
+- Scraping & Features from Document:
+
+1. Implement ScraperActor: reqwest to fetch sites, parse with scraper crate.
+2. Handle inputs: Text, audio (mock STT), contract addresses.
+3. History: Store in qdrant or local DB (sled crate).
+4. Backtest: Periodic actor task comparing old/new analyses.
+
+- Platform Integrations:
+
+1. Mobile: Follow cove pattern – build Rust with cargo-ndk/cargo-ios, generate bindings, call from Kotlin/Swift.
+2. Desktop: cargo new crates/desktop --bin, add Iced; UI for input/response.
+3. Web: cargo new crates/web --lib, use wasm-pack; bind to core.
+
+- Docker & Backend:
+
+1. Create docker/images/Dockerfile: FROM rust:1.70, copy crates/backend, build/release.
+2. Compose: Run backend on port 8000, qdrant on 6333.
+
+- Benchmarking/Profiling/Tests:
+
+1. Add benches/ in core: Criterion for actor latency.
+2. Profile: `cargo flamegraph --bin backend`.
+3. Tests: Cover 80%+; include document scenarios (e.g., test $BTC analysis).

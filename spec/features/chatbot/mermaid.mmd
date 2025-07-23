@@ -1,0 +1,24 @@
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> ActiveSession: User initiates chat
+    
+    state ActiveSession {
+        [*] --> MessageReceived
+        MessageReceived --> IntentRecognition
+        IntentRecognition --> CachedResponse: Simple query
+        IntentRecognition --> FullAnalysis: Needs deep check
+        
+        state FullAnalysis {
+            [*] --> TokenLookup
+            TokenLookup --> ComplianceCheck
+            ComplianceCheck --> ResponseGeneration
+        }
+        
+        CachedResponse --> SendReply
+        ResponseGeneration --> SendReply
+    }
+    
+    SendReply --> WaitingFeedback: Offer follow-ups
+    WaitingFeedback --> ActiveSession: User responds
+    WaitingFeedback --> Timeout: 5min inactivity
+    Timeout --> Idle

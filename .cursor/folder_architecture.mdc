@@ -1,0 +1,46 @@
+---
+alwaysApply: false
+---
+
+fiqhai/
+├── Cargo.toml # Workspace root: [workspace] members = ["crates/*"]
+├── crates/
+│ ├── core/ # Shared Rust logic: actors, AI chains, Solana integration, API
+│ │ ├── src/
+│ │ │ ├── actors/ # QueryActor.rs, ScraperActor.rs, etc.
+│ │ │ ├── ai/ # langchain chains, rig agents, qdrant client
+│ │ │ ├── api/ # Axum routes for indexer API
+│ │ │ ├── blockchain/ # Solana RPC wrappers
+│ │ │ ├── models/ # Data structs (TokenAnalysis, Fatwa)
+│ │ │ ├── lib.rs # Exports for UniFFI/WASM
+│ │ ├── uniffi.toml # UniFFI config
+│ │ ├── benches/ # Criterion benchmarks
+│ │ ├── tests/ # Unit/integration tests
+│ │ └── Cargo.toml # Deps: rig, langchain-rs, qdrant, solana-sdk, tokio, etc.
+│ ├── desktop/ # Iced-based desktop app
+│ │ ├── src/ # main.rs: Iced UI + core calls
+│ │ ├── Cargo.toml # Deps: iced, core
+│ ├── web/ # WASM frontend
+│ │ ├── src/ # Yew/Leptos UI + WASM bindings to core
+│ │ ├── Cargo.toml # Deps: wasm-bindgen, yew, core
+│ └── backend/ # Dockerized AI service entrypoint
+│ ├── src/ # main.rs: Runs Axum server + qdrant embed if needed
+│ └── Cargo.toml # Deps: axum, core
+├── android/ # Android app
+│ ├── app/ # Kotlin/Jetpack Compose UI
+│ ├── build.gradle # Includes UniFFI-generated bindings
+│ └── rust/ # Symlink or copy of core for cargo build
+├── ios/ # iOS app
+│ ├── FiqhAI/ # Swift/SwiftUI UI
+│ ├── FiqhAI.xcodeproj # Xcode project with UniFFI bridges
+│ └── rust/ # Symlink/copy of core
+├── docker/ # AI backend service
+│ ├── Dockerfile # Builds backend crate; includes qdrant if embedded
+│ ├── docker-compose.yml # Services: backend, qdrant (if separate)
+│ └── entrypoint.sh # Startup script
+├── scripts/ # Build helpers
+│ ├── build-mobile.sh # Cargo mobile builds
+│ ├── benchmark.sh # Run criterion + flamegraph
+│ └── test-all.sh # Cross-platform tests
+├── README.md # Setup, build instructions
+└── .github/workflows/ # CI: build, test, benchmark

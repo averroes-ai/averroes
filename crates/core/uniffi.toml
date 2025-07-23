@@ -1,0 +1,11 @@
+[bindings.kotlin]
+package_name = "com.rizilab.fiqhadvisor"
+cdylib_name = "fiqhai_core"
+generate_immutable_records = true
+
+[bindings.swift]
+module_name = "FiqhAICore"
+ffi_module_name = "FiqhAICoreFFI"
+ffi_module_filename = "fiqhaicore"
+generate_immutable_records = true
+omit_argument_labels = false

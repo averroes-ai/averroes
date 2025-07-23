@@ -1,0 +1,30 @@
+stateDiagram-v2
+    [*] --> WaitingForInput
+    WaitingForInput --> LinkReceived: User provides external URL
+    LinkReceived --> ValidatingSource: Verify link credibility
+    
+    state ValidatingSource {
+        [*] --> CheckingDomain
+        CheckingDomain --> Trusted: Known halal-analysis source
+        CheckingDomain --> Untrusted: Unverified source
+    }
+    
+    Trusted --> ContentExtraction: Scrape article/data
+    Untrusted --> Warning: Flag as unverified\nbut proceed
+    
+    ContentExtraction --> DataIntegration: Merge with internal DB
+    Warning --> DataIntegration
+    
+    state DataIntegration {
+        [*] --> CrossReferencing
+        CrossReferencing --> Consistent: Matches existing rulings
+        CrossReferencing --> NewInfo: Contains novel insights
+    }
+    
+    Consistent --> UpdateConfidence: Increase reliability score
+    NewInfo --> ScholarReview: Queue for manual verification
+    UpdateConfidence --> AnalysisReady
+    ScholarReview --> AnalysisReady: After approval
+    
+    AnalysisReady --> ResponseGeneration: Create enhanced report
+    ResponseGeneration --> [*]

@@ -1,0 +1,63 @@
+---
+alwaysApply: false
+---
+
+# Technical Guidance
+
+## Architecture Principles
+
+- Actor Pattern with Tokio: Based on the blog (https://ryhl.io/blog/actors-with-tokio/), we'll model components as actors (e.g., QueryActor for user inputs, ScraperActor for data fetching, AnalyzerActor for AI processing). Each actor runs in a Tokio task, communicating via channels (mpsc or broadcast). This provides low-latency, fault-isolated concurrency for handling multiple user sessions, blockchain queries, and AI chains without blocking the main thread.
+- Rust Libraries:
+
+1. `rig`: For high-level AI agent orchestration (e.g., chaining prompts for fatwa analysis).
+2. `rmcp`: For managing AI model control planes (e.g., loading local models or interfacing with external APIs like Grok).
+3. `langchain-rs`: To build chains for processing inputs (e.g., text-to-analysis chain incorporating scraping and vector search).
+4. `qdrant`: As a vector DB for storing embeddings of fatwas, token metadata, and histories; enables semantic search for accurate halal categorizations.
+5. Additional: `solana-sdk` for Solana interactions, `reqwest` for HTTP scraping, `serde` for serialization, `tokio` for async, `uniffi` for FFI bindings.
+
+- Multiplatform Sharing:
+
+1. Core logic in a shared Rust crate exposed via UniFFI (inspired by Cove: https://github.com/bitcoinppl/cove, which uses UniFFI for Rust-mobile interop). This generates bindings for Swift (iOS), Kotlin (Android), and allows direct use in desktop/web.
+2. Mobile: SwiftUI for iOS, Jetpack Compose for Android; UniFFI handles Rust calls for AI/blockchain logic.
+3. Desktop: Use Iced (preferred over Slint for its elm-like architecture and better Rust integration; it's lightweight and supports async).
+4. Web: Compile core to WASM with wasm-bindgen; use Yew or Leptos for UI.
+
+- Benchmarking & Profiling:
+
+1. Use criterion crate for micro-benchmarks (e.g., actor message latency, AI chain execution time).
+2. flamegraph for profiling (via cargo flamegraph) to identify bottlenecks in scraping or Solana RPC calls.
+3. Integrate into CI with GitHub Actions; run benchmarks on PRs.
+
+- Testing:
+
+1. Unit tests: Cargo test for core logic (e.g., mock actors, fake Solana responses).
+2. Integration tests: For AI chains (mock qdrant), end-to-end (simulate user inputs).
+3. Platform-specific: Android Instrumentation tests, iOS XCTests, Web with wasm-bindgen-test.
+
+- Low Latency Optimizations:
+
+1. Async everywhere: Use Tokio for all I/O (scraping, DB, Solana RPC).
+2. Caching: In-memory cache (e.g., dashmap) for frequent token analyses; qdrant for persistent vectors.
+3. Batching: Actors batch messages for bulk processing (e.g., multiple scraping requests).
+
+- Docker for AI Backend: A separate service for resource-intensive tasks (e.g., model inference, qdrant server). Use Docker Compose for local dev; expose API endpoints for token indexing and analysis.
+
+- Solana-Specific:
+
+1. Fetch token metadata via Solana RPC (e.g., getProgramAccounts for SPL tokens).
+2. Integrate with Solana DApp ecosystem: Use solana-program if needed for on-chain logic, but focus on off-chain analysis.
+
+- API for Token Halal Indexer: RESTful API (using Axum) in the core crate, served via Docker. Endpoints: /analyze/{token}, /index/{token}, /history/{token}.
+
+- Data Flow:
+
+1. User Input → Actor → Langchain Chain (scrape + vector search in qdrant + rig analysis) → Response + History Save.
+2. Scraping: Initial bootstrap from sites like cryptohalal.cc; user-provided links via reqwest + scraper crate.
+3. Audio: Use external STT (e.g., via API) or local (if feasible in Rust); respond with TTS if needed.
+
+- Potential Challenges & Mitigations
+
+1. AI Accuracy: Use prompt engineering for maqashid syariah alignment; backtest with historical data.
+2. Cross-Platform Builds: Use Cargo workspaces; scripts for platform builds (e.g., cargo-mobile for mobile).
+3. Latency: Target <500ms for analyses; profile actors to ensure no deadlocks.
+4. Dependencies: Pin versions; no runtime installs.

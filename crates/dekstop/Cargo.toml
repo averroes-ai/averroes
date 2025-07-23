@@ -1,0 +1,12 @@
+[package]
+name = "desktop"
+repository.workspace = true
+license.workspace = true
+edition.workspace = true
+workspace = "../.."
+
+[dependencies]
+fiqh_core = { path = "../core" }
+
+[lints]
+workspace = true

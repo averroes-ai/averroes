@@ -7,11 +7,19 @@ workspace = ".."
 
 [dev-dependencies]
 criterion.workspace = true
-package-core = { path = "../core" }
+fiqh_core = { path = "../crates/core" }
+tokio = { workspace = true, features = ["full"] }
+futures = { workspace = true }
+uuid = { workspace = true }
 
 [[bench]]
 name = "benches"
 path = "src/benches.rs"
+harness = false
+
+[[bench]]
+name = "analysis_performance"
+path = "src/analysis_performance.rs"
 harness = false
 
 [lints]

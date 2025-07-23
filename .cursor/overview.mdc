@@ -1,0 +1,15 @@
+---
+alwaysApply: true
+---
+
+# Project Overview:
+
+Building FiqhAIFiqhAI is a multiplatform AI application designed to analyze the halal status of cryptocurrency tokens based on Islamic fatwas and principles (e.g., maqashid syariah, avoiding riba, gharar, maysir). It processes user inputs like token tickers, smart contract addresses, text/audio prompts, and integrates features such as data scraping, history tracking, follow-up questions, and a token halal indexer API. The core logic will be implemented in Rust for performance and safety, shared across platforms. We'll use an actor-based architecture for concurrency and low latency, drawing from the Tokio actor pattern. The project will be a monorepo using Cargo workspaces for Rust crates, with platform-specific directories. AI components will leverage libraries like rig (for AI orchestration), rmcp (for model control), langchain-rs (for chaining AI workflows), and qdrant (for vector database storage of fatwas and token data). For mobile, we'll adapt patterns from the Cove project using UniFFI for Rust-Swift/Kotlin bindings. Desktop will use Iced for its simplicity and Rust-native UI. Web will compile to WASM. Benchmarking/profiling will use criterion and flamegraph, with comprehensive tests via Cargo's built-in testing.
+
+Key Goals:
+
+- Low latency: Actor pattern ensures non-blocking, concurrent handling of AI queries, scraping, and blockchain interactions.
+- Cross-platform: Shared Rust core minimizes duplication.
+- AI Backend: Dockerized service for heavy AI tasks (e.g., model inference, scraping).
+- Solana Integration: Use Solana RPC for token metadata fetching (e.g., via solana-sdk crate) and DApp catalog access.
+- Security/Compliance: Handle user data privately; no external installs in code execution.
