@@ -53,6 +53,7 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    ndkVersion = rootProject.extra["ndkVersion"] as String
 }
 
 dependencies {

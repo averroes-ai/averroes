@@ -1,5 +1,5 @@
 [bindings.kotlin]
-package_name = "com.rizilab.fiqhadvisor"
+package_name = "com.rizilab.fiqhadvisor.fiqhcore"
 cdylib_name = "fiqhai_core"
 generate_immutable_records = true
 
