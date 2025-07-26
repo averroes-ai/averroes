@@ -279,6 +279,7 @@ mobile-dev:
     @just fmt
     @just clippy
     @just test
+    @just check-wsl-filesystem  # Check WSL health before build
     @just build-android      # Gradle handles Rust + UniFFI + Android
     @echo "✅ Mobile development cycle completed!"
 
@@ -497,3 +498,83 @@ status:
     cargo test --all --no-run 2>/dev/null && echo "✅ Tests compile" || echo "❌ Test compilation issues"
     @echo "\n📏 Binary sizes:"
     @just size 2>/dev/null || echo "❌ No release binaries found"
+
+# ============================================================================
+# GRADLE DAEMON & WSL FIX COMMANDS
+# ============================================================================
+
+# Fix WSL I/O errors and Gradle daemon corruption
+fix-gradle-wsl:
+    #!/usr/bin/env bash
+    echo "🔧 Fixing WSL I/O errors and Gradle daemon issues..."
+    cd android
+    
+    # Stop all Gradle daemons
+    echo "⏹️ Stopping Gradle daemons..."
+    ./gradlew --stop || true
+    
+    # Kill any remaining Gradle processes
+    echo "🔥 Killing remaining Gradle processes..."
+    pkill -f gradle || true
+    pkill -f "Gradle Daemon" || true
+    
+    # Clear Gradle caches and temporary files
+    echo "🗑️ Clearing Gradle caches..."
+    rm -rf ~/.gradle/caches/ || true
+    rm -rf ~/.gradle/daemon/ || true
+    rm -rf .gradle/ || true
+    rm -rf build/ || true
+    rm -rf app/build/ || true
+    rm -rf core/build/ || true
+    
+    # Clear Android build outputs
+    echo "🗑️ Clearing Android build outputs..."
+    find . -name "*.tmp" -delete || true
+    find . -name "*.lock" -delete || true
+    
+    # Restart Gradle daemon with fresh settings
+    echo "🔄 Restarting Gradle daemon..."
+    ./gradlew --daemon --refresh-dependencies
+    
+    echo "✅ Gradle WSL fix completed!"
+
+# Clean build for when gradle is corrupted
+clean-build:
+    #!/usr/bin/env bash
+    echo "🧹 Performing complete clean build..."
+    
+    # Fix WSL/Gradle issues first
+    just fix-gradle-wsl
+    
+    # Clean Rust target directory
+    echo "🗑️ Cleaning Rust targets..."
+    cargo clean
+    
+    # Rebuild everything
+    echo "🔨 Starting fresh build..."
+    cd android
+    ./gradlew clean
+    ./gradlew :core:assembleDebug
+    
+    echo "✅ Clean build completed!"
+
+# Quick WSL file system check
+check-wsl-filesystem:
+    #!/usr/bin/env bash
+    echo "🔍 Checking WSL file system health..."
+    
+    # Check disk space
+    echo "💾 Disk space:"
+    df -h /mnt/d
+    
+    # Check file permissions
+    echo "📂 File permissions:"
+    ls -la android/
+    
+    # Check for locked files
+    echo "🔒 Checking for locked files:"
+    lsof +D android/ 2>/dev/null | head -10 || echo "No locked files found"
+    
+    # Test file creation
+    echo "📝 Testing file creation..."
+    touch android/test_file.tmp && rm android/test_file.tmp && echo "✅ File I/O works" || echo "❌ File I/O failed"

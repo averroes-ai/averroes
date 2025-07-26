@@ -1,7 +1,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use chrono::DateTime;
 use chrono::Utc;
+use chrono::Utc as UtcTime;
+use serde::Deserialize;
+use serde::Serialize;
 use solana_client::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
 use tokio::sync::Mutex;
@@ -25,6 +29,7 @@ use crate::models::SolanaError;
 use crate::models::TokenStandard;
 use crate::models::analysis::ScrapedData;
 use crate::models::analysis::TokenAnalysis;
+use crate::models::fatwa::FatwaReference;
 use crate::models::fatwa::IslamicAnalysis;
 use crate::models::fatwa::IslamicPrinciple;
 use crate::models::messages::AnalyzerError;
@@ -32,9 +37,30 @@ use crate::models::messages::AnalyzerMessage;
 use crate::models::query::Query;
 use crate::models::query::QueryType;
 use crate::models::token::SolanaTokenInfo;
+use crate::models::token::UniversalTokenInfo;
+
+// Data structures used by the analyzer actor and external APIs
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IslamicAnalysisResult {
+    pub is_halal: bool,
+    pub compliance_score: f64,
+    pub confidence: f64,
+    pub reasoning: Vec<String>,
+    pub scholar_references: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComprehensiveAnalysis {
+    pub analysis_id: Uuid,
+    pub token_info: UniversalTokenInfo, // Changed from TokenInfo to UniversalTokenInfo
+    pub islamic_analysis: IslamicAnalysisResult,
+    pub ai_reasoning: Option<String>,
+    pub timestamp: DateTime<UtcTime>,
+}
 
 pub struct AnalyzerActor {
     receiver: mpsc::Receiver<AnalyzerMessage>,
+
     #[allow(dead_code)]
     solana_client: RpcClient,
     analysis_cache: Arc<RwLock<HashMap<Uuid, TokenAnalysis>>>,
@@ -42,6 +68,7 @@ pub struct AnalyzerActor {
     backtest_chain: Arc<Mutex<Option<BacktestChain>>>,
     vector_db: Arc<Mutex<Option<VectorDatabase>>>,
     config: AnalyzerConfig,
+    ai_service: Arc<crate::ai::AIService>,
 }
 
 #[derive(Debug, Clone)]
@@ -72,19 +99,23 @@ impl AnalyzerActor {
         receiver: mpsc::Receiver<AnalyzerMessage>,
         solana_rpc_url: Option<String>,
         config: Option<AnalyzerConfig>,
+        ai_service: Arc<crate::ai::AIService>,
     ) -> Self {
         let config = config.unwrap_or_default();
+
         let solana_client =
             RpcClient::new(solana_rpc_url.unwrap_or_else(|| "https://api.mainnet-beta.solana.com".to_owned()));
 
         Self {
             receiver,
+
             solana_client,
             analysis_cache: Arc::new(RwLock::new(HashMap::new())),
             islamic_chain: Arc::new(Mutex::new(None)),
             backtest_chain: Arc::new(Mutex::new(None)),
             vector_db: Arc::new(Mutex::new(None)),
             config,
+            ai_service,
         }
     }
 
@@ -278,19 +309,21 @@ impl AnalyzerActor {
             token_info.cloned()
         };
 
-        // Perform Islamic analysis using AI chain
-        let islamic_analysis = if let Some(chain) = self.islamic_chain.lock().await.as_ref() {
-            match chain.analyze_token(query, solana_token_info.as_ref(), scraped_data).await {
-                Ok(analysis) => analysis,
-                Err(e) => {
-                    error!("Islamic analysis failed: {}", e);
-                    // Fallback to basic analysis
-                    self.create_fallback_analysis(&e.to_string()).await
-                },
-            }
-        } else {
-            warn!("Islamic chain not available, using fallback analysis");
-            self.create_fallback_analysis("Islamic chain not initialized").await
+        // Perform Islamic analysis using AI service directly
+        let islamic_analysis = match self
+            .ai_service
+            .analyze_islamic_compliance(&self.create_analysis_prompt(query, solana_token_info.as_ref(), scraped_data))
+            .await
+        {
+            Ok(analysis_result) => {
+                info!("AI service analysis completed successfully");
+                self.parse_ai_analysis_result(&analysis_result).await
+            },
+            Err(e) => {
+                error!("AI service analysis failed: {}", e);
+                // Fallback to basic analysis
+                self.create_fallback_analysis(&e.clone()).await
+            },
         };
 
         let processing_time = start_time.elapsed();
@@ -348,13 +381,14 @@ impl AnalyzerActor {
             metadata: crate::models::TokenMetadata {
                 name: "Unknown Token".to_owned(),
                 symbol: "UNK".to_owned(),
-                mint_address: address.to_owned(),
+                contract_address: address.to_owned(),
                 decimals: 9,
                 description: Some("Token metadata fetched from blockchain".to_owned()),
                 image_url: None,
                 creator: None,
                 verified: false,
                 token_standard: TokenStandard::SPL,
+                blockchain: crate::models::token::BlockchainNetwork::Solana,
             },
             price_data: None,
             holders: None,
@@ -482,13 +516,14 @@ impl AnalyzerActor {
                 metadata: crate::models::TokenMetadata {
                     name: token_identifier.clone(),
                     symbol: token_identifier.to_uppercase(),
-                    mint_address: "mock_address".to_owned(),
+                    contract_address: "mock_address".to_owned(),
                     decimals: 9,
                     description: Some(format!("Mock data for {token_identifier} token")),
                     image_url: None,
                     creator: None,
                     verified: false,
                     token_standard: TokenStandard::SPL,
+                    blockchain: crate::models::token::BlockchainNetwork::Solana,
                 },
                 price_data: None,
                 holders: None,
@@ -535,17 +570,39 @@ impl AnalyzerActor {
     ) -> IslamicAnalysis {
         warn!("Creating fallback Islamic analysis due to: {}", error_context);
 
-        IslamicAnalysis {
-            ruling: IslamicPrinciple::Mubah, // Default to permissible with low confidence
-            confidence: 0.3,                 // Low confidence for fallback
-            reasoning: format!(
-                "Analisis dasar berdasarkan prinsip umum Islam. {error_context}. Direkomendasikan untuk konsultasi \
-                 lebih lanjut dengan ahli fiqh."
-            ),
-            supporting_fatwas: vec![],
-            risk_factors: vec!["Analisis terbatas".to_owned()],
-            recommendations: vec!["Konsultasi dengan ahli fiqh".to_owned()],
-            maqashid_assessment: vec![],
+        // Try to use AI service for fallback analysis
+        match self
+            .ai_service
+            .analyze_islamic_compliance(&format!("Analisis Islam: {error_context}"))
+            .await
+        {
+            Ok(ai_response) => {
+                info!("AI service provided fallback analysis");
+                IslamicAnalysis {
+                    ruling: IslamicPrinciple::Mubah, // Default to permissible
+                    confidence: 0.6,                 // Moderate confidence for AI fallback
+                    reasoning: ai_response,
+                    supporting_fatwas: vec![],
+                    risk_factors: vec!["Analisis menggunakan AI fallback".to_owned()],
+                    recommendations: vec!["Verifikasi dengan ahli fiqh".to_owned()],
+                    maqashid_assessment: vec![],
+                }
+            },
+            Err(e) => {
+                warn!("AI service also failed: {}, using basic fallback", e);
+                IslamicAnalysis {
+                    ruling: IslamicPrinciple::Mubah, // Default to permissible with low confidence
+                    confidence: 0.3,                 // Low confidence for basic fallback
+                    reasoning: format!(
+                        "Analisis dasar berdasarkan prinsip umum Islam. {error_context}. Direkomendasikan untuk \
+                         konsultasi lebih lanjut dengan ahli fiqh."
+                    ),
+                    supporting_fatwas: vec![],
+                    risk_factors: vec!["Analisis terbatas".to_owned()],
+                    recommendations: vec!["Konsultasi dengan ahli fiqh".to_owned()],
+                    maqashid_assessment: vec![],
+                }
+            },
         }
     }
 
@@ -632,17 +689,199 @@ impl AnalyzerActor {
     }
 }
 
-pub async fn spawn_analyzer_actor(solana_rpc_url: Option<String>) -> crate::models::AnalyzerActorHandle {
+// Following the proper actor pattern from https://ryhl.io/blog/actors-with-tokio/
+pub async fn spawn_analyzer_actor(
+    solana_rpc_url: Option<String>,
+    ai_service: Arc<crate::ai::AIService>,
+) -> crate::models::messages::AnalyzerActorHandle {
     let (sender, receiver) = mpsc::channel(32);
 
-    let mut actor = AnalyzerActor::new(receiver, solana_rpc_url, None).await;
+    let mut actor = AnalyzerActor::new(receiver, solana_rpc_url, None, ai_service).await;
 
     tokio::spawn(async move {
         actor.run().await;
     });
 
-    crate::models::AnalyzerActorHandle {
+    crate::models::messages::AnalyzerActorHandle {
         sender,
+    }
+}
+
+impl AnalyzerActor {
+    /// Create analysis prompt for AI service
+    fn create_analysis_prompt(
+        &self,
+        query: &Query,
+        token_info: Option<&SolanaTokenInfo>,
+        scraped_data: &[ScrapedData],
+    ) -> String {
+        let mut prompt =
+            String::from("You are an Islamic finance expert. Analyze the following for Sharia compliance:\n\n");
+
+        // Add query information
+        match &query.query_type {
+            QueryType::Text {
+                text,
+            } => {
+                prompt.push_str(&format!("Query: {text}\n\n"));
+            },
+            QueryType::TokenTicker {
+                ticker,
+            } => {
+                prompt.push_str(&format!("Token: {ticker}\n\n"));
+            },
+            QueryType::ContractAddress {
+                address,
+            } => {
+                prompt.push_str(&format!("Contract Address: {address}\n\n"));
+            },
+            _ => {},
+        }
+
+        // Add token information if available
+        if let Some(token) = token_info {
+            prompt.push_str("Token Details:\n");
+            prompt.push_str(&format!("- Name: {}\n", token.metadata.name));
+            prompt.push_str(&format!("- Symbol: {}\n", token.metadata.symbol));
+            prompt.push_str(&format!("- Decimals: {}\n", token.metadata.decimals));
+            if let Some(price_data) = &token.price_data {
+                prompt.push_str(&format!("- Price: ${}\n", price_data.price_usd));
+                prompt.push_str(&format!("- Market Cap: ${}\n", price_data.market_cap));
+            }
+            prompt.push('\n');
+        }
+
+        // Add scraped data
+        if !scraped_data.is_empty() {
+            prompt.push_str("Additional Information:\n");
+            for data in scraped_data.iter().take(3) {
+                // Limit to avoid token limits
+                prompt.push_str(&format!("- {}\n", data.content.chars().take(200).collect::<String>()));
+            }
+            prompt.push('\n');
+        }
+
+        prompt.push_str("Please provide:\n");
+        prompt.push_str("1. RULING: HALAL or HARAM\n");
+        prompt.push_str("2. CONFIDENCE: 0.0 to 1.0\n");
+        prompt.push_str("3. REASONING: Detailed explanation with Islamic principles\n");
+        prompt.push_str("4. SOURCES: Relevant Islamic finance sources\n");
+
+        prompt
+    }
+
+    /// Parse AI analysis result into `IslamicAnalysis`
+    async fn parse_ai_analysis_result(
+        &self,
+        analysis_result: &str,
+    ) -> IslamicAnalysis {
+        let analysis_lower = analysis_result.to_lowercase();
+
+        // If the analysis result is an error message, provide a fallback analysis
+        if analysis_lower.contains("error:") || analysis_lower.contains("unable to analyze") {
+            return IslamicAnalysis {
+                ruling: IslamicPrinciple::Syubhat, // Doubtful due to analysis failure
+                confidence: 0.3,
+                reasoning: "Analysis could not be completed due to service limitations. Manual review recommended."
+                    .to_owned(),
+                supporting_fatwas: vec![],
+                risk_factors: vec!["Unable to complete automated analysis".to_owned()],
+                recommendations: vec!["Seek guidance from Islamic finance scholars".to_owned()],
+                maqashid_assessment: vec![],
+            };
+        }
+
+        // Determine the specific Islamic ruling based on content analysis
+        let ruling = if analysis_lower.contains("riba")
+            || (analysis_lower.contains("interest") && analysis_lower.contains("haram"))
+            || (analysis_lower.contains("lending")
+                && analysis_lower.contains("borrowing")
+                && analysis_lower.contains("haram"))
+        {
+            IslamicPrinciple::Riba
+        } else if analysis_lower.contains("gharar")
+            || (analysis_lower.contains("uncertainty") && analysis_lower.contains("haram"))
+            || (analysis_lower.contains("speculation") && analysis_lower.contains("haram"))
+        {
+            IslamicPrinciple::Gharar
+        } else if analysis_lower.contains("maysir")
+            || (analysis_lower.contains("gambling") && analysis_lower.contains("haram"))
+            || (analysis_lower.contains("lottery") && analysis_lower.contains("haram"))
+        {
+            IslamicPrinciple::Maysir
+        } else if analysis_lower.contains("makruh")
+            || (analysis_lower.contains("discouraged") && !analysis_lower.contains("haram"))
+        {
+            IslamicPrinciple::Makruh
+        } else if analysis_lower.contains("mustahab") || analysis_lower.contains("recommended") {
+            IslamicPrinciple::Mustahab
+        } else if analysis_lower.contains("syubhat")
+            || analysis_lower.contains("doubtful")
+            || analysis_lower.contains("suspicious")
+        {
+            IslamicPrinciple::Syubhat
+        } else if analysis_lower.contains("halal") && !analysis_lower.contains("haram") {
+            IslamicPrinciple::Halal
+        } else if analysis_lower.contains("haram") {
+            IslamicPrinciple::Haram
+        } else {
+            // Default to neutral if unclear
+            IslamicPrinciple::Mubah
+        };
+
+        let confidence = if analysis_result.contains("CONFIDENCE:") {
+            analysis_result
+                .lines()
+                .find(|line| line.contains("CONFIDENCE:"))
+                .and_then(|line| line.split(':').nth(1))
+                .and_then(|s| s.trim().parse::<f64>().ok())
+                .unwrap_or(0.7)
+        } else {
+            0.7
+        };
+
+        let reasoning = analysis_result
+            .lines()
+            .filter(|line| !line.contains("RULING:") && !line.contains("CONFIDENCE:") && !line.contains("SOURCES:"))
+            .map(|s| s.trim().to_owned())
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let sources = analysis_result
+            .lines()
+            .skip_while(|line| !line.contains("SOURCES:"))
+            .skip(1)
+            .take(3)
+            .map(|s| s.trim().to_owned())
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>();
+
+        // Extract risk factors based on the ruling type
+        let risk_factors = match ruling {
+            IslamicPrinciple::Riba => vec!["Interest-based mechanism".to_owned(), "Usury concerns".to_owned()],
+            IslamicPrinciple::Gharar => vec!["Excessive uncertainty".to_owned(), "Speculative nature".to_owned()],
+            IslamicPrinciple::Maysir => vec!["Gambling elements".to_owned(), "Chance-based returns".to_owned()],
+            _ => vec![],
+        };
+
+        IslamicAnalysis {
+            ruling,
+            confidence,
+            reasoning,
+            supporting_fatwas: sources
+                .into_iter()
+                .map(|s| FatwaReference {
+                    fatwa_id: Uuid::new_v4().to_string(),
+                    relevance_score: 0.8,
+                    excerpt: s.clone(),
+                    reasoning: "Referenced in AI analysis".to_owned(),
+                })
+                .collect(),
+            risk_factors,
+            recommendations: vec![],
+            maqashid_assessment: vec![],
+        }
     }
 }
 
@@ -652,14 +891,34 @@ mod tests {
 
     #[tokio::test]
     async fn test_analyzer_actor_creation() {
-        let handle = spawn_analyzer_actor(None).await;
+        // Create a mock AI service for testing
+        let config = crate::FiqhAIConfig {
+            groq_api_key: "test_key".to_owned(),
+            grok_api_key: "".to_owned(),
+            openai_api_key: "".to_owned(),
+            preferred_model: "groq".to_owned(),
+            ..Default::default()
+        };
+        let ai_service = Arc::new(crate::ai::AIService::new(&config).await.unwrap());
+
+        let handle = spawn_analyzer_actor(None, ai_service).await;
         assert!(handle.sender.capacity() > 0);
     }
 
     #[tokio::test]
     async fn test_token_extraction() {
+        // Create a mock AI service for testing
+        let config = crate::FiqhAIConfig {
+            groq_api_key: "test_key".to_owned(),
+            grok_api_key: "".to_owned(),
+            openai_api_key: "".to_owned(),
+            preferred_model: "groq".to_owned(),
+            ..Default::default()
+        };
+        let ai_service = Arc::new(crate::ai::AIService::new(&config).await.unwrap());
+
         let (_sender, receiver) = mpsc::channel(10);
-        let actor = AnalyzerActor::new(receiver, None, None).await;
+        let actor = AnalyzerActor::new(receiver, None, None, ai_service).await;
 
         let result = actor.extract_token_from_text("What is BTC price?");
         assert_eq!(result, Some("BTC".to_owned()));
@@ -670,8 +929,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_keyword_extraction() {
+        // Create a mock AI service for testing
+        let config = crate::FiqhAIConfig {
+            groq_api_key: "test_key".to_owned(),
+            grok_api_key: "".to_owned(),
+            openai_api_key: "".to_owned(),
+            preferred_model: "groq".to_owned(),
+            ..Default::default()
+        };
+        let ai_service = Arc::new(crate::ai::AIService::new(&config).await.unwrap());
+
         let (_sender, receiver) = mpsc::channel(10);
-        let actor = AnalyzerActor::new(receiver, None, None).await;
+        let actor = AnalyzerActor::new(receiver, None, None, ai_service).await;
 
         let analysis = IslamicAnalysis {
             ruling: IslamicPrinciple::Riba,

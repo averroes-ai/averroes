@@ -45,26 +45,18 @@ pub use models::{
 };
 use tokio::sync::RwLock;
 
-use crate::api::middleware::MiddlewareState;
-use crate::api::middleware::RateLimitConfig;
-use crate::api::middleware::RateLimiter;
-use crate::api::middleware::auth_middleware;
-use crate::api::middleware::create_cors_layer;
-use crate::api::middleware::rate_limit_middleware;
-use crate::api::middleware::security_headers_middleware;
-use crate::api::middleware::tracing_middleware;
-use crate::api::middleware::validation_middleware;
-use crate::api::routes::create_router;
-
 // Define config and error types directly here since they're not in models
 #[derive(Clone, Debug, uniffi::Record)]
 pub struct FiqhAIConfig {
     pub openai_api_key: String,
+    pub groq_api_key: String,
+    pub grok_api_key: String,
     pub model_name: String,
     pub qdrant_url: String,
     pub database_path: String,
     pub solana_rpc_url: String,
     pub enable_solana: bool,
+    pub preferred_model: String, // "groq", "grok", or "openai"
 }
 
 // ============================================================================
@@ -85,7 +77,7 @@ pub struct FiqhAISystem {
     #[allow(dead_code)]
     scraper_actor: ScraperActorHandle,
     analyzer_actor: AnalyzerActorHandle,
-    history_actor: HistoryActorHandle,
+    history_actor: Option<HistoryActorHandle>,
     config: FiqhAIConfig,
 }
 
@@ -93,11 +85,15 @@ impl Default for FiqhAIConfig {
     fn default() -> Self {
         Self {
             openai_api_key: std::env::var("OPENAI_API_KEY").ok().unwrap_or_else(|| "".to_owned()),
+            groq_api_key: std::env::var("GROQ_API_KEY").ok().unwrap_or_else(|| "".to_owned()),
+            grok_api_key: std::env::var("GROK_API_KEY").ok().unwrap_or_else(|| "".to_owned()),
             model_name: "gpt-4".to_owned(),
             qdrant_url: "http://localhost:6333".to_owned(),
-            database_path: "./data/fiqh_ai.db".to_owned(),
+            database_path: "".to_owned(), // Use empty path to trigger in-memory database
+
             solana_rpc_url: "https://api.mainnet-beta.solana.com".to_owned(),
             enable_solana: true,
+            preferred_model: "groq".to_owned(),
         }
     }
 }
@@ -107,12 +103,18 @@ impl FiqhAISystem {
     /// Initialize the complete `FiqhAI` system
     #[uniffi::constructor]
     pub async fn new(config: FiqhAIConfig) -> Result<Self, FiqhAIError> {
-        // Spawn all actors in the correct order
-        let history_actor = spawn_history_actor(Some(config.database_path.clone()))
-            .await
-            .map_err(|e| FiqhAIError::InitializationError(format!("Failed to spawn history actor: {e}")))?;
+        // Initialize AI service first
+        let ai_service = Arc::new(
+            AIService::new(&config)
+                .await
+                .map_err(|e| FiqhAIError::InitializationError(format!("Failed to initialize AI service: {e}")))?,
+        );
 
-        let analyzer_actor = spawn_analyzer_actor(Some(config.solana_rpc_url.clone())).await;
+        // Spawn all actors in the correct order
+        // For mobile platforms, skip history actor entirely - no database needed
+        let history_actor = None; // Always skip for mobile to avoid any database issues
+
+        let analyzer_actor = spawn_analyzer_actor(Some(config.solana_rpc_url.clone()), ai_service.clone()).await;
         let scraper_actor = spawn_scraper_actor().await;
 
         let query_actor = spawn_query_actor(scraper_actor.clone(), analyzer_actor.clone(), history_actor.clone()).await;
@@ -149,6 +151,39 @@ impl FiqhAISystem {
     ) -> Result<QueryResponse, FiqhAIError> {
         let query = Query::new_token_ticker(token, user_id, language);
         self.process_query(query).await
+    }
+
+    pub async fn analyze_token_symbol(
+        &self,
+        symbol: String,
+    ) -> Result<QueryResponse, FiqhAIError> {
+        let analysis = self
+            .analyzer_actor
+            .comprehensive_analysis(&symbol)
+            .await
+            .map_err(|e| FiqhAIError::AnalysisError(e.to_string()))?;
+
+        let response_text = format!(
+            "Token: {} ({})\nStatus: {}\nConfidence: {:.0}%\n\nReasoning:\n{}",
+            analysis.token_info.metadata.name,
+            analysis.token_info.metadata.symbol,
+            if analysis.islamic_analysis.is_halal {
+                "HALAL ✅"
+            } else {
+                "HARAM ❌"
+            },
+            analysis.islamic_analysis.confidence * 100.0,
+            analysis.islamic_analysis.reasoning.join("\n• ")
+        );
+
+        Ok(QueryResponse::new(
+            analysis.analysis_id,
+            response_text,
+            analysis.islamic_analysis.confidence,
+            analysis.islamic_analysis.scholar_references,
+            vec![], // No follow-up questions for MVP
+            Some(analysis.analysis_id),
+        ))
     }
 
     /// Analyze text input
@@ -190,10 +225,18 @@ impl FiqhAISystem {
         user_id: String,
         limit: Option<u32>,
     ) -> Result<AnalysisHistory, FiqhAIError> {
+        // Return empty history if history actor is not available (mobile mode)
+        let Some(ref history_actor) = self.history_actor else {
+            return Ok(AnalysisHistory {
+                entries: vec![],
+                total_count: 0,
+                next_cursor: None,
+            });
+        };
+
         let query = HistoryQuery::new().for_user(user_id).limit(limit.unwrap_or(20) as usize);
 
-        let history = self
-            .history_actor
+        let history = history_actor
             .query_analyses(query)
             .await
             .map_err(|e| FiqhAIError::ActorError(e.to_string()))?;
@@ -207,10 +250,18 @@ impl FiqhAISystem {
         token: String,
         limit: Option<u32>,
     ) -> Result<AnalysisHistory, FiqhAIError> {
+        // Return empty history if history actor is not available (mobile mode)
+        let Some(ref history_actor) = self.history_actor else {
+            return Ok(AnalysisHistory {
+                entries: vec![],
+                total_count: 0,
+                next_cursor: None,
+            });
+        };
+
         let query = HistoryQuery::new().for_token(token).limit(limit.unwrap_or(10) as usize);
 
-        let history = self
-            .history_actor
+        let history = history_actor
             .query_analyses(query)
             .await
             .map_err(|e| FiqhAIError::ActorError(e.to_string()))?;
@@ -223,13 +274,27 @@ impl FiqhAISystem {
         &self,
         user_id: String,
     ) -> Result<UserAnalysisStats, FiqhAIError> {
-        let stats = self
-            .history_actor
-            .get_user_stats(user_id)
-            .await
-            .map_err(|e| FiqhAIError::ActorError(e.to_string()))?;
-
-        Ok(stats)
+        // Return default stats if no history actor (mobile mode)
+        if let Some(ref history_actor) = self.history_actor {
+            let stats = history_actor
+                .get_user_stats(user_id)
+                .await
+                .map_err(|e| FiqhAIError::ActorError(e.to_string()))?;
+            Ok(stats)
+        } else {
+            // Return default stats for mobile
+            Ok(UserAnalysisStats {
+                user_id,
+                total_analyses: 0,
+                halal_count: 0,
+                haram_count: 0,
+                mubah_count: 0,
+                average_confidence: 0.0,
+                first_analysis: 0,
+                last_analysis: None,
+                top_tokens: vec![],
+            })
+        }
     }
 
     /// Run backtest for a specific analysis
@@ -597,13 +662,31 @@ pub fn create_default_config() -> FiqhAIConfig {
 /// Create mobile-optimized configuration
 #[uniffi::export]
 pub fn create_mobile_config(
+    groq_api_key: Option<String>,
+    grok_api_key: Option<String>,
     openai_api_key: Option<String>,
     enable_vector_search: bool,
 ) -> FiqhAIConfig {
+    let groq_available = groq_api_key.is_some();
+    let grok_available = grok_api_key.is_some();
+
     FiqhAIConfig {
         openai_api_key: openai_api_key.unwrap_or_else(|| "".to_owned()),
+        groq_api_key: groq_api_key.unwrap_or_else(|| "".to_owned()),
+        grok_api_key: grok_api_key.unwrap_or_else(|| "".to_owned()),
         enable_solana: enable_vector_search,
-        ..Default::default()
+        preferred_model: if groq_available {
+            "groq".to_owned()
+        } else if grok_available {
+            "grok".to_owned()
+        } else {
+            "openai".to_owned()
+        },
+        // Use empty database path for mobile platforms to trigger in-memory database
+        database_path: "".to_owned(),
+        model_name: "gpt-4".to_owned(),
+        qdrant_url: "http://localhost:6333".to_owned(),
+        solana_rpc_url: "https://api.mainnet-beta.solana.com".to_owned(),
     }
 }
 
@@ -612,29 +695,24 @@ pub fn create_mobile_config(
 // ============================================================================
 
 impl FiqhAISystem {
-    /// Internal method to create HTTP API router (not exposed to mobile)
-    pub fn create_api_router(&self) -> axum::Router {
-        let app_state = AppState {
-            query_actor: self.query_actor.clone(),
-            analyzer_actor: self.analyzer_actor.clone(),
-            history_actor: self.history_actor.clone(),
-        };
+    // Internal method to create HTTP API router (not exposed to mobile)
+    // pub fn create_api_router(&self) -> axum::Router {
+    //     // Only create router if history actor is available (non-mobile mode)
+    //     if let Some(ref history_actor) = self.history_actor {
+    //         let _app_state = AppState {
+    //             query_actor: self.query_actor.clone(),
+    //             analyzer_actor: self.analyzer_actor.clone(),
+    //             history_actor: history_actor.clone(),
+    //         };
 
-        // Create middleware state
-        let rate_limiter = Arc::new(RateLimiter::new(RateLimitConfig::default()));
-        let middleware_state = MiddlewareState {
-            rate_limiter,
-        };
-
-        // Build the router with all middleware
-        create_router(app_state)
-            .layer(create_cors_layer())
-            .layer(axum::middleware::from_fn(security_headers_middleware))
-            .layer(axum::middleware::from_fn(validation_middleware))
-            .layer(axum::middleware::from_fn(tracing_middleware))
-            .layer(axum::middleware::from_fn(auth_middleware))
-            .layer(axum::middleware::from_fn_with_state(middleware_state.clone(), rate_limit_middleware))
-    }
+    //         // Create middleware state
+    //         // ... rest of router creation
+    //         // todo("Complete router implementation for non-mobile mode")
+    //     } else {
+    //         // Return empty router for mobile mode
+    //         axum::Router::new()
+    //     }
+    // }
 }
 
 // ============================================================================
@@ -675,8 +753,15 @@ mod mobile_tests {
         let default_config = create_default_config();
         assert_eq!(default_config.model_name, "gpt-4");
 
-        let mobile_config = create_mobile_config(Some("test_key".to_owned()), true);
+        let mobile_config = create_mobile_config(
+            Some("groq_key".to_owned()),
+            Some("grok_key".to_owned()),
+            Some("test_key".to_owned()),
+            true,
+        );
         assert_eq!(mobile_config.openai_api_key, "test_key");
+        assert_eq!(mobile_config.groq_api_key, "groq_key");
+        assert_eq!(mobile_config.grok_api_key, "grok_key");
         assert!(mobile_config.enable_solana);
     }
 }

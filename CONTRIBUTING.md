@@ -10,6 +10,7 @@ Thank you for your interest in contributing to Fiqh Advisor! This document provi
 - [Development Workflow](#development-workflow)
 - [Code Standards](#code-standards)
 - [Testing Guidelines](#testing-guidelines)
+- [AI System Diagnostics](DIAGNOSTIC_GUIDE.md) 🔗
 - [Submitting Changes](#submitting-changes)
 - [Troubleshooting](#troubleshooting)
 
@@ -557,6 +558,25 @@ refactor(rust): simplify actor message handling
 
 ## 🧪 Testing Guidelines
 
+### AI System Diagnostic Testing
+
+For comprehensive AI system testing and troubleshooting, see our dedicated **[Diagnostic Guide](DIAGNOSTIC_GUIDE.md)** which covers:
+
+- 🔧 Built-in diagnostic features
+- 📱 Step-by-step testing procedures  
+- 🖥️ Log monitoring and analysis
+- 🚨 Troubleshooting common issues
+- 📋 Quick reference commands
+
+**Quick Start:**
+```bash
+# Run automated diagnostic test
+./test_ai_system.sh test
+
+# Monitor AI system logs
+adb logcat -v time | grep "AISystemDiagnostics" --color=always
+```
+
 ### Rust Testing
 
 #### Unit Tests
@@ -711,6 +731,15 @@ Your PR will be reviewed for:
 - **Security**: No security vulnerabilities?
 
 ## 🛠 Troubleshooting
+
+### AI System Issues
+
+For AI-specific troubleshooting including system initialization, API connectivity, and diagnostic testing, see the comprehensive **[Diagnostic Guide](DIAGNOSTIC_GUIDE.md)**.
+
+**Common AI Issues:**
+- System initialization failures → See [Diagnostic Guide - System Initialization](DIAGNOSTIC_GUIDE.md#issue-system-initialization-fails)
+- Fallback responses instead of AI → See [Diagnostic Guide - AI Responses](DIAGNOSTIC_GUIDE.md#issue-ai-responses-are-fallback-messages)
+- App crashes on startup → See [Diagnostic Guide - App Crashes](DIAGNOSTIC_GUIDE.md#issue-app-crashes-on-startup)
 
 ### Common Issues
 

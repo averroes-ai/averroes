@@ -184,6 +184,24 @@ just clean                # Clean all build artifacts
 just generate-bindings    # Generate UniFFI bindings only
 ```
 
+### Testing and Diagnostics
+
+For comprehensive AI system testing and troubleshooting, see our **[Diagnostic Guide](DIAGNOSTIC_GUIDE.md)** which includes:
+
+- 🔧 Built-in diagnostic features and automated testing
+- 📱 Step-by-step manual testing procedures
+- 🖥️ Real-time log monitoring and analysis
+- 🚨 Troubleshooting guide for common issues
+
+**Quick diagnostic test:**
+```bash
+# Run automated AI system test
+./test_ai_system.sh test
+
+# Monitor AI system logs in real-time
+adb logcat -v time | grep "AISystemDiagnostics" --color=always
+```
+
 ## 📱 Project Structure
 
 ```

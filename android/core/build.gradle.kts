@@ -57,7 +57,7 @@ cargoNdk {
     librariesNames = arrayListOf("libfiqh_core.so")
     targets = arrayListOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
     targetDirectory = "../../target"
-    extraCargoBuildArguments = arrayListOf("--features", "vendored,mobile")
+    extraCargoBuildArguments = arrayListOf("--features", "ai,mobile")
 }
 
 // Generate UniFFI bindings - simplified approach to avoid Kotlin DSL issues

@@ -484,17 +484,15 @@ async fn setup_test_system() -> (
     crate::models::AnalyzerActorHandle,
     crate::models::HistoryActorHandle,
 ) {
-    // Create temporary directory for history database
-    let temp_dir = TempDir::new().expect("Failed to create temp directory");
-    let db_path = temp_dir.path().join("test_history.db");
-
-    // Spawn all actors
-    let history_handle = spawn_history_actor(Some(db_path.to_string_lossy().to_owned()))
+    // Use in-memory database for tests
+    let history_handle = spawn_history_actor(None)
         .await
         .expect("Failed to spawn history actor");
     
-    let analyzer_handle = spawn_analyzer_actor(Some("http://localhost:8899".to_owned()))
-        .await;
+    let analyzer_handle = spawn_analyzer_actor(
+        Some("http://localhost:8899".to_owned()),
+        std::sync::Arc::new(crate::ai::AIService::new(&crate::FiqhAIConfig::default()).await.unwrap())
+    ).await;
     
     let scraper_handle = spawn_scraper_actor().await;
     

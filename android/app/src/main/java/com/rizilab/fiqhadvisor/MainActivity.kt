@@ -3,80 +3,47 @@ package com.rizilab.fiqhadvisor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import dagger.hilt.android.AndroidEntryPoint
+import com.rizilab.fiqhadvisor.navigation.FiqhAdvisorNavigation
+import com.rizilab.fiqhadvisor.ui.theme.FiqhColors
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
-                FiqhAIApp()
+            FiqhAdvisorTheme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = FiqhColors.Background
+                ) {
+                    FiqhAdvisorNavigation()
+                }
             }
         }
     }
 }
 
 @Composable
-fun FiqhAIApp() {
-    var analysisResult by remember { mutableStateOf("") }
-    var showResult by remember { mutableStateOf(false) }
-    
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = "FiqhAI Advisor",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.Black,
-            modifier = Modifier.padding(bottom = 32.dp)
-        )
-        
-        Text(
-            text = "Islamic Finance Token Analysis",
-            fontSize = 16.sp,
-            color = Color.Gray,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-        
-        Button(
-            onClick = {
-                // TODO: Call Rust core for token analysis
-                analysisResult = "Analysis complete! Token appears to be Halal based on preliminary screening."
-                showResult = true
-            },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF4CAF50) // Green color
-            ),
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                text = "Analyze Token",
-                color = Color.White
-            )
-        }
-        
-        if (showResult) {
-            Text(
-                text = analysisResult,
-                fontSize = 14.sp,
-                color = Color.Black,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 16.dp)
-            )
-        }
-    }
-} 
+fun FiqhAdvisorTheme(content: @Composable () -> Unit) {
+    MaterialTheme(
+        colorScheme = androidx.compose.material3.lightColorScheme(
+            primary = FiqhColors.Primary,
+            secondary = FiqhColors.Secondary,
+            background = FiqhColors.Background,
+            surface = FiqhColors.Surface,
+            onPrimary = FiqhColors.OnPrimary,
+            onSecondary = FiqhColors.OnSecondary,
+            onBackground = FiqhColors.OnBackground,
+            onSurface = FiqhColors.OnSurface,
+            error = FiqhColors.Error,
+            onError = FiqhColors.OnError
+        ),
+        content = content
+    )
+}

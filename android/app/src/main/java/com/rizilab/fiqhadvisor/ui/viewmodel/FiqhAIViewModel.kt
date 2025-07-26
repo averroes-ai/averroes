@@ -1,255 +1,357 @@
 package com.rizilab.fiqhadvisor.ui.viewmodel
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import android.content.Context
+import android.util.Log
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.rizilab.fiqhadvisor.AISystemDiagnostics
 import com.rizilab.fiqhadvisor.core.FiqhAIManager
+import com.rizilab.fiqhadvisor.core.FiqhAiConfig
+import com.rizilab.fiqhadvisor.core.QueryResponse
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-data class FiqhAIUiState(
-        val isInitialized: Boolean = false,
-        val isLoading: Boolean = false,
-        val isAnalyzing: Boolean = false,
-        val isRecording: Boolean = false,
-        val currentAnalysis: Any? = null, // Would be QueryResponse
-        val chatHistory: List<Any> = emptyList(), // Would be List<ChatMessage>
-        val analysisHistory: List<Any> = emptyList(), // Would be List<HistoryEntry>
-        val error: String? = null
-)
+@HiltViewModel
+class FiqhAIViewModel
+@Inject
+constructor(
+        private val fiqhManager: FiqhAIManager,
+        @ApplicationContext private val context: Context
+) : ViewModel() {
 
-class FiqhAIViewModel(private val application: Application) : AndroidViewModel(application) {
-    private val fiqhAIManager = FiqhAIManager()
+    private val _analysisState = MutableStateFlow<AnalysisState>(AnalysisState.Idle)
+    val analysisState: StateFlow<AnalysisState> = _analysisState.asStateFlow()
 
-    private val _isAnalyzing = MutableStateFlow(false)
-    private val _isRecording = MutableStateFlow(false)
-    private val _currentAnalysis = MutableStateFlow<Any?>(null)
-    private val _chatHistory = MutableStateFlow<List<Any>>(emptyList())
-    private val _analysisHistory = MutableStateFlow<List<Any>>(emptyList())
-    private val _error = MutableStateFlow<String?>(null)
+    private var isInitialized = false
+    private var initializationFailed = false
+    private var chatSessionStarted = false
 
-    val uiState: StateFlow<FiqhAIUiState> =
-            combine(
-                            fiqhAIManager.initializationState.map {
-                                it is FiqhAIManager.InitializationState.Initialized
-                            },
-                            fiqhAIManager.initializationState.map {
-                                it is FiqhAIManager.InitializationState.Initializing
-                            },
-                            _isAnalyzing,
-                            _isRecording,
-                            _currentAnalysis,
-                            _chatHistory,
-                            _analysisHistory,
-                            _error
-                    ) { flows ->
-                        val isInitialized = flows[0] as Boolean
-                        val isLoading = flows[1] as Boolean
-                        val isAnalyzing = flows[2] as Boolean
-                        val isRecording = flows[3] as Boolean
-                        val analysis = flows[4]
-                        val chatHistory = flows[5] as List<Any>
-                        val analysisHistory = flows[6] as List<Any>
-                        val error = flows[7] as String?
+    private suspend fun ensureInitialized(): Boolean {
+        if (initializationFailed) {
+            return false
+        }
 
-                        FiqhAIUiState(
-                                isInitialized = isInitialized,
-                                isLoading = isLoading,
-                                isAnalyzing = isAnalyzing,
-                                isRecording = isRecording,
-                                currentAnalysis = analysis,
-                                chatHistory = chatHistory,
-                                analysisHistory = analysisHistory,
-                                error = error
-                        )
-                    }
-                    .stateIn(
-                            scope = viewModelScope,
-                            started = SharingStarted.WhileSubscribed(5000),
-                            initialValue = FiqhAIUiState()
-                    )
-
-    init {
-        initializeFiqhAI()
-    }
-
-    private fun initializeFiqhAI() {
-        viewModelScope.launch {
+        if (!isInitialized) {
             try {
+                Log.d("FiqhAIViewModel", "Attempting to initialize AI system...")
+
+                // Check if manager is already ready
+                if (fiqhManager.isReady()) {
+                    isInitialized = true
+                    return true
+                }
+
                 val config =
-                        com.rizilab.fiqhadvisor.fiqhcore.FiqhAiConfig(
-                                openaiApiKey = "", // Will be set from user preferences
-                                modelName = "gpt-4",
-                                qdrantUrl = "http://localhost:6333",
-                                databasePath = application.getDatabasePath("fiqh.db").absolutePath,
+                        FiqhAiConfig(
+                                openaiApiKey = "",
+                                groqApiKey =
+                                        "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",
+                                grokApiKey =
+                                        "xai-udKDRvvyrDuAYyrfye8thCLUgiKCNveOyYQrHjHnHCJ5pWUWH9TtfEQ73OI7Poh5b0UJZJvAPhYCKFEE",
+                                modelName = "llama3-8b-8192",
+                                qdrantUrl = "", // Disable vector DB for mobile to avoid crashes
+                                databasePath =
+                                        context.getDir("fiqh_data", Context.MODE_PRIVATE)
+                                                .absolutePath, // Proper Android path
                                 solanaRpcUrl = "https://api.mainnet-beta.solana.com",
-                                enableSolana = true
+                                enableSolana = true,
+                                preferredModel = "groq"
                         )
-                fiqhAIManager.initialize(application, config)
+
+                Log.d("FiqhAIViewModel", "Initializing FiqhAIManager with config...")
+                Log.d("FiqhAIViewModel", "Config database path: ${config.databasePath}")
+
+                fiqhManager.initialize(context, config)
+
+                // Verify initialization worked
+                if (fiqhManager.isReady()) {
+                    isInitialized = true
+                    Log.i("FiqhAIViewModel", "✅ AI system initialized successfully")
+                    return true
+                } else {
+                    Log.e(
+                            "FiqhAIViewModel",
+                            "❌ AI system initialization failed - manager not ready"
+                    )
+                    initializationFailed = true
+                    return false
+                }
             } catch (e: Exception) {
-                _error.value = "Failed to initialize FiqhAI: ${e.message}"
+                Log.e("FiqhAIViewModel", "❌ Failed to initialize AI system: ${e.message}", e)
+                initializationFailed = true
+                return false
+            }
+        }
+        return true
+    }
+
+    private fun provideFallbackResponse(query: String): String {
+        return when {
+            query.contains("bitcoin", ignoreCase = true) -> {
+                """
+                **Bitcoin Analysis (Fallback Mode)**
+                
+                🔴 **Ruling: Haram (Prohibited)**
+                
+                **Islamic Reasoning:**
+                • **Excessive Gharar (Uncertainty)**: Bitcoin's extreme price volatility creates excessive uncertainty, which is prohibited in Islamic finance
+                • **Speculation (Maysir)**: Often used for gambling-like speculation rather than legitimate trade
+                • **No Intrinsic Value**: Lacks tangible backing or utility beyond speculation
+                
+                **Confidence: 70%**
+                
+                *Note: This is a simplified analysis. For detailed guidance, consult qualified Islamic scholars.*
+                """.trimIndent()
+            }
+            query.contains("halal", ignoreCase = true) ||
+                    query.contains("haram", ignoreCase = true) -> {
+                """
+                **Islamic Finance Analysis (Fallback Mode)**
+                
+                I can help analyze cryptocurrencies and financial instruments from an Islamic perspective. However, the AI system is currently unavailable.
+                
+                **General Islamic Finance Principles:**
+                • Avoid Riba (Interest/Usury)
+                • Avoid Gharar (Excessive Uncertainty)
+                • Avoid Maysir (Gambling/Speculation)
+                • Ensure Halal underlying assets
+                
+                Please try again later when the full AI system is available for detailed analysis.
+                """.trimIndent()
+            }
+            else -> {
+                """
+                **FiqhAdvisor (Fallback Mode)**
+                
+                I'm your Islamic finance AI assistant, but I'm currently experiencing technical difficulties.
+                
+                I can help you with:
+                • Cryptocurrency Islamic compliance analysis
+                • Islamic finance principles
+                • Halal/Haram determinations for financial instruments
+                
+                Please try again in a few moments, or ask about specific cryptocurrencies like "Is Bitcoin halal?"
+                """.trimIndent()
             }
         }
     }
 
-    // Add back the initialize method for UI compatibility
-    fun initialize(openAiApiKey: String? = null) {
-        initializeFiqhAI()
-    }
-
-    // Token Analysis
-    fun analyzeToken(tokenTicker: String, userId: String? = "android_user") {
-        if (tokenTicker.isBlank()) return
-
+    fun analyzeToken(symbol: String) {
         viewModelScope.launch {
-            _isAnalyzing.value = true
-            _error.value = null
+            _analysisState.value = AnalysisState.Loading
 
-            fiqhAIManager
-                    .analyzeToken(tokenTicker, userId)
-                    .onSuccess { response -> _currentAnalysis.value = response }
-                    .onFailure { exception ->
-                        _error.value = "Token analysis failed: ${exception.message}"
-                    }
+            try {
+                Log.d("FiqhAIViewModel", "🔍 Analyzing token: $symbol")
 
-            _isAnalyzing.value = false
-        }
-    }
-
-    // Text Analysis
-    fun analyzeText(text: String, userId: String? = "android_user") {
-        if (text.isBlank()) return
-
-        viewModelScope.launch {
-            _isAnalyzing.value = true
-            _error.value = null
-
-            fiqhAIManager
-                    .analyzeText(text, userId)
-                    .onSuccess { response -> _currentAnalysis.value = response }
-                    .onFailure { exception ->
-                        _error.value = "Text analysis failed: ${exception.message}"
-                    }
-
-            _isAnalyzing.value = false
-        }
-    }
-
-    // Contract Analysis
-    fun analyzeContract(contractAddress: String, userId: String? = "android_user") {
-        if (contractAddress.isBlank()) return
-
-        viewModelScope.launch {
-            _isAnalyzing.value = true
-            _error.value = null
-
-            fiqhAIManager
-                    .analyzeContract(contractAddress, userId)
-                    .onSuccess { response -> _currentAnalysis.value = response }
-                    .onFailure { exception ->
-                        _error.value = "Contract analysis failed: ${exception.message}"
-                    }
-
-            _isAnalyzing.value = false
-        }
-    }
-
-    // Audio Recording (Mock implementation)
-    private var mockAudioData: ByteArray? = null
-
-    fun startAudioRecording() {
-        _isRecording.value = !_isRecording.value
-
-        if (_isRecording.value) {
-            // Mock recording - in real implementation, would use MediaRecorder
-            viewModelScope.launch {
-                kotlinx.coroutines.delay(3000) // Simulate 3 second recording
-                mockAudioData = "mock_audio_data".toByteArray()
-                _isRecording.value = false
+                if (ensureInitialized()) {
+                    Log.d(
+                            "FiqhAIViewModel",
+                            "✅ System initialized, calling fiqhManager.analyzeToken()"
+                    )
+                    val result = fiqhManager.analyzeToken(symbol.uppercase())
+                    result.fold(
+                            onSuccess = { response ->
+                                Log.i("FiqhAIViewModel", "✅ Token analysis successful for $symbol")
+                                Log.d(
+                                        "FiqhAIViewModel",
+                                        "Response: ${response.response.take(100)}..."
+                                )
+                                _analysisState.value = AnalysisState.Success(response)
+                            },
+                            onFailure = { error ->
+                                Log.e(
+                                        "FiqhAIViewModel",
+                                        "❌ Token analysis failed: ${error.message}"
+                                )
+                                Log.e(
+                                        "FiqhAIViewModel",
+                                        "Error type: ${error::class.java.simpleName}"
+                                )
+                                _analysisState.value =
+                                        AnalysisState.Error(
+                                                when {
+                                                    error.message?.contains("network") == true ->
+                                                            "Network error. Please check your connection."
+                                                    error.message?.contains("not found") == true ->
+                                                            "Token '$symbol' not found. Please check the symbol."
+                                                    error.message?.contains("rate limit") == true ->
+                                                            "Too many requests. Please wait a moment."
+                                                    else -> "Analysis failed: ${error.message}"
+                                                }
+                                        )
+                            }
+                    )
+                } else {
+                    Log.w(
+                            "FiqhAIViewModel",
+                            "⚠️ System not initialized, providing fallback response"
+                    )
+                    val fallbackResponse = provideFallbackResponse("$symbol token analysis")
+                    _analysisState.value = AnalysisState.FallbackResponse(fallbackResponse)
+                }
+            } catch (e: Exception) {
+                Log.e("FiqhAIViewModel", "💥 Exception during token analysis", e)
+                val fallbackResponse = provideFallbackResponse("$symbol token analysis")
+                _analysisState.value = AnalysisState.FallbackResponse(fallbackResponse)
             }
         }
     }
 
-    fun analyzeAudioRecording(userId: String? = "android_user") {
-        val audioData =
-                mockAudioData
-                        ?: run {
-                            _error.value = "No audio data available. Please record audio first."
-                            return
-                        }
-
+    fun analyzeGeneralQuery(text: String) {
         viewModelScope.launch {
-            _isAnalyzing.value = true
-            _error.value = null
+            _analysisState.value = AnalysisState.Loading
 
-            fiqhAIManager
-                    .analyzeAudio(audioData, userId)
-                    .onSuccess { response ->
-                        _currentAnalysis.value = response
-                        mockAudioData = null // Clear after use
-                    }
-                    .onFailure { exception ->
-                        _error.value = "Audio analysis failed: ${exception.message}"
-                    }
+            try {
+                Log.d("FiqhAIViewModel", "🔍 Analyzing general query: $text")
 
-            _isAnalyzing.value = false
+                if (ensureInitialized()) {
+                    Log.d(
+                            "FiqhAIViewModel",
+                            "✅ System initialized, calling fiqhManager.analyzeText()"
+                    )
+                    val result = fiqhManager.analyzeText(text)
+                    result.fold(
+                            onSuccess = { response ->
+                                Log.i("FiqhAIViewModel", "✅ General query analysis successful")
+                                Log.d(
+                                        "FiqhAIViewModel",
+                                        "Response: ${response.response.take(100)}..."
+                                )
+                                _analysisState.value = AnalysisState.Success(response)
+                            },
+                            onFailure = { error ->
+                                Log.e(
+                                        "FiqhAIViewModel",
+                                        "❌ General query analysis failed: ${error.message}"
+                                )
+                                Log.e(
+                                        "FiqhAIViewModel",
+                                        "Error type: ${error::class.java.simpleName}"
+                                )
+                                val fallbackResponse = provideFallbackResponse(text)
+                                _analysisState.value =
+                                        AnalysisState.FallbackResponse(fallbackResponse)
+                            }
+                    )
+                } else {
+                    Log.w(
+                            "FiqhAIViewModel",
+                            "⚠️ System not initialized, providing fallback response"
+                    )
+                    val fallbackResponse = provideFallbackResponse(text)
+                    _analysisState.value = AnalysisState.FallbackResponse(fallbackResponse)
+                }
+            } catch (e: Exception) {
+                Log.e("FiqhAIViewModel", "💥 Exception during general query analysis", e)
+                val fallbackResponse = provideFallbackResponse(text)
+                _analysisState.value = AnalysisState.FallbackResponse(fallbackResponse)
+            }
         }
     }
 
-    // Chat Operations
-    fun startChatSession(userId: String = "android_user"): String {
-        return fiqhAIManager.startChatSession(userId)
-    }
-
-    fun sendChatMessage(message: String, context: String? = null) {
-        if (message.isBlank()) return
-
+    /** Send a chat message using the proper chat session functionality */
+    fun sendChatMessage(message: String) {
         viewModelScope.launch {
-            fiqhAIManager
-                    .sendChatMessage(message, context)
-                    .onSuccess { response ->
-                        // Update chat history
-                        fiqhAIManager
-                                .getChatHistory()
-                                .onSuccess { chatHistory -> _chatHistory.value = chatHistory }
-                                .onFailure { error -> _error.value = error.message }
+            _analysisState.value = AnalysisState.Loading
+
+            try {
+                Log.d("FiqhAIViewModel", "🔍 Sending chat message: $message")
+
+                if (ensureInitialized()) {
+                    // Start chat session if not already started
+                    if (!chatSessionStarted) {
+                        val sessionId = fiqhManager.startChatSession("user123", "id")
+                        chatSessionStarted = true
+                        Log.d("FiqhAIViewModel", "✅ Started chat session: $sessionId")
                     }
-                    .onFailure { exception ->
-                        _error.value = "Chat message failed: ${exception.message}"
-                    }
+
+                    Log.d(
+                            "FiqhAIViewModel",
+                            "✅ System initialized, sending chat message via FiqhAIManager"
+                    )
+                    val result = fiqhManager.sendChatMessage(message)
+                    result.fold(
+                            onSuccess = { response ->
+                                Log.i("FiqhAIViewModel", "✅ Chat message successful")
+                                Log.d(
+                                        "FiqhAIViewModel",
+                                        "Response: ${response.response.take(100)}..."
+                                )
+                                _analysisState.value = AnalysisState.Success(response)
+                            },
+                            onFailure = { error ->
+                                Log.e("FiqhAIViewModel", "❌ Chat message failed: ${error.message}")
+                                Log.e(
+                                        "FiqhAIViewModel",
+                                        "Error type: ${error::class.java.simpleName}"
+                                )
+                                val fallbackResponse = provideFallbackResponse(message)
+                                _analysisState.value =
+                                        AnalysisState.FallbackResponse(fallbackResponse)
+                            }
+                    )
+                } else {
+                    Log.w(
+                            "FiqhAIViewModel",
+                            "⚠️ System not initialized, providing fallback response"
+                    )
+                    val fallbackResponse = provideFallbackResponse(message)
+                    _analysisState.value = AnalysisState.FallbackResponse(fallbackResponse)
+                }
+            } catch (e: Exception) {
+                Log.e("FiqhAIViewModel", "💥 Exception during chat message", e)
+                val fallbackResponse = provideFallbackResponse(message)
+                _analysisState.value = AnalysisState.FallbackResponse(fallbackResponse)
+            }
         }
     }
 
-    fun clearChatSession() {
+    /** Test AI response generation for debugging */
+    fun testAIResponse(query: String) {
         viewModelScope.launch {
-            fiqhAIManager.clearChatSession()
-            _chatHistory.value = emptyList()
+            _analysisState.value = AnalysisState.Loading
+
+            try {
+                Log.d("FiqhAIViewModel", "Testing AI response for: $query")
+
+                // Use diagnostic tool to test AI response
+                val response = AISystemDiagnostics.testAIResponse(query)
+
+                // Create a mock QueryResponse for testing
+                val mockResponse =
+                        QueryResponse(
+                                queryId = java.util.UUID.randomUUID().toString(),
+                                response = response,
+                                confidence = 0.85,
+                                sources = listOf("AI System Diagnostic"),
+                                followUpQuestions =
+                                        listOf(
+                                                "Would you like more details about the AI system configuration?",
+                                                "Should I run additional diagnostic tests?"
+                                        ),
+                                timestamp = System.currentTimeMillis().toULong(),
+                                analysisId = java.util.UUID.randomUUID().toString()
+                        )
+
+                _analysisState.value = AnalysisState.Success(mockResponse)
+            } catch (e: Exception) {
+                Log.e("FiqhAIViewModel", "AI response test failed: ${e.message}", e)
+                val fallbackResponse = provideFallbackResponse(query)
+                _analysisState.value = AnalysisState.FallbackResponse(fallbackResponse)
+            }
         }
     }
+}
 
-    // History Operations
-    fun loadUserHistory(userId: String = "android_user", limit: Int = 20) {
-        viewModelScope.launch {
-            fiqhAIManager
-                    .getUserHistory(userId, limit)
-                    .onSuccess { history -> _analysisHistory.value = history.entries }
-                    .onFailure { exception ->
-                        _error.value = "Failed to load history: ${exception.message}"
-                    }
-        }
-    }
-
-    // Error Handling
-    fun clearError() {
-        _error.value = null
-    }
-
-    fun clearCurrentAnalysis() {
-        _currentAnalysis.value = null
-    }
+sealed class AnalysisState {
+    object Idle : AnalysisState()
+    object Loading : AnalysisState()
+    data class Success(val result: QueryResponse) : AnalysisState()
+    data class Error(val message: String) : AnalysisState()
+    data class FallbackResponse(val message: String) : AnalysisState()
 }

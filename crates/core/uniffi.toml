@@ -1,6 +1,6 @@
 [bindings.kotlin]
 package_name = "com.rizilab.fiqhadvisor.fiqhcore"
-cdylib_name = "fiqhai_core"
+cdylib_name = "fiqh_core"
 generate_immutable_records = true
 
 [bindings.swift]
