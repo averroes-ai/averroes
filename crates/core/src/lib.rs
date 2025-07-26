@@ -100,24 +100,72 @@ impl Default for FiqhAIConfig {
 
 #[uniffi::export]
 impl FiqhAISystem {
-    /// Initialize the complete `FiqhAI` system
+    /// Initialize the complete `FiqhAI` system with mobile-friendly approach
     #[uniffi::constructor]
     pub async fn new(config: FiqhAIConfig) -> Result<Self, FiqhAIError> {
-        // Initialize AI service first
-        let ai_service = Arc::new(
-            AIService::new(&config)
+        log::info!("Starting FiqhAI system initialization...");
+
+        // Step 1: Initialize AI service with retries and fallbacks
+        let ai_service = match Self::initialize_ai_service(&config).await {
+            Ok(service) => Arc::new(service),
+            Err(e) => {
+                log::error!("AI service initialization failed: {}", e);
+                return Err(FiqhAIError::InitializationError(format!("AI service failed: {e}")));
+            },
+        };
+
+        log::info!("✅ AI service initialized successfully");
+
+        // Step 2: Create minimal mobile config - disable all optional features
+        let analyzer_config = AnalyzerConfig {
+            openai_api_key: None,           // Disable OpenAI for mobile to avoid API calls
+            model_name: "mock".to_string(), // Use mock for mobile
+            enable_vector_search: false,    // Always disable vector search for mobile
+            qdrant_url: "".to_string(),     // Empty URL
+            analysis_timeout_seconds: 15,   // Shorter timeout for mobile
+            enable_backtest: false,         // Always disable backtest for mobile
+        };
+
+        log::info!("✅ Mobile-friendly config created");
+
+        // Step 3: Spawn actors with error recovery
+        let history_actor = None; // Always skip for mobile
+
+        let analyzer_actor =
+            match Self::spawn_analyzer_actor_safe(None, Some(analyzer_config), ai_service.clone()).await {
+                Ok(actor) => actor,
+                Err(e) => {
+                    log::error!("Analyzer actor spawn failed: {}", e);
+                    return Err(FiqhAIError::InitializationError(format!("Analyzer actor failed: {e}")));
+                },
+            };
+
+        log::info!("✅ Analyzer actor spawned successfully");
+
+        let scraper_actor = match Self::spawn_scraper_actor_safe().await {
+            Ok(actor) => actor,
+            Err(e) => {
+                log::error!("Scraper actor spawn failed: {}", e);
+                return Err(FiqhAIError::InitializationError(format!("Scraper actor failed: {e}")));
+            },
+        };
+
+        log::info!("✅ Scraper actor spawned successfully");
+
+        let query_actor =
+            match Self::spawn_query_actor_safe(scraper_actor.clone(), analyzer_actor.clone(), history_actor.clone())
                 .await
-                .map_err(|e| FiqhAIError::InitializationError(format!("Failed to initialize AI service: {e}")))?,
-        );
+            {
+                Ok(actor) => actor,
+                Err(e) => {
+                    log::error!("Query actor spawn failed: {}", e);
+                    return Err(FiqhAIError::InitializationError(format!("Query actor failed: {e}")));
+                },
+            };
 
-        // Spawn all actors in the correct order
-        // For mobile platforms, skip history actor entirely - no database needed
-        let history_actor = None; // Always skip for mobile to avoid any database issues
+        log::info!("✅ Query actor spawned successfully");
 
-        let analyzer_actor = spawn_analyzer_actor(Some(config.solana_rpc_url.clone()), ai_service.clone()).await;
-        let scraper_actor = spawn_scraper_actor().await;
-
-        let query_actor = spawn_query_actor(scraper_actor.clone(), analyzer_actor.clone(), history_actor.clone()).await;
+        log::info!("🎉 FiqhAI system initialized successfully!");
 
         Ok(Self {
             query_actor,
@@ -126,6 +174,65 @@ impl FiqhAISystem {
             history_actor,
             config,
         })
+    }
+
+    /// Safe AI service initialization with error handling
+    async fn initialize_ai_service(
+        config: &FiqhAIConfig
+    ) -> Result<crate::ai::AIService, Box<dyn std::error::Error + Send + Sync>> {
+        // For mobile, create a minimal AI service that doesn't fail
+        match crate::ai::AIService::new_mobile_safe(config).await {
+            Ok(service) => Ok(service),
+            Err(e) => {
+                log::warn!("Failed to create full AI service, creating minimal fallback: {}", e);
+                // Create a minimal AI service that won't fail
+                crate::ai::AIService::new_minimal_fallback(config).await
+            },
+        }
+    }
+
+    /// Safe analyzer actor spawning with error recovery
+    async fn spawn_analyzer_actor_safe(
+        solana_rpc_url: Option<String>,
+        config: Option<AnalyzerConfig>,
+        ai_service: Arc<crate::ai::AIService>,
+    ) -> Result<crate::models::messages::AnalyzerActorHandle, Box<dyn std::error::Error + Send + Sync>> {
+        // Use tokio::time::timeout to prevent hanging
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            spawn_analyzer_actor(solana_rpc_url, config, ai_service),
+        )
+        .await
+        {
+            Ok(actor) => Ok(actor),
+            Err(_) => Err("Analyzer actor spawn timed out".into()),
+        }
+    }
+
+    /// Safe scraper actor spawning
+    async fn spawn_scraper_actor_safe()
+    -> Result<crate::models::messages::ScraperActorHandle, Box<dyn std::error::Error + Send + Sync>> {
+        match tokio::time::timeout(std::time::Duration::from_secs(5), spawn_scraper_actor()).await {
+            Ok(actor) => Ok(actor),
+            Err(_) => Err("Scraper actor spawn timed out".into()),
+        }
+    }
+
+    /// Safe query actor spawning
+    async fn spawn_query_actor_safe(
+        scraper_actor: crate::models::messages::ScraperActorHandle,
+        analyzer_actor: crate::models::messages::AnalyzerActorHandle,
+        history_actor: Option<crate::models::messages::HistoryActorHandle>,
+    ) -> Result<crate::models::messages::QueryActorHandle, Box<dyn std::error::Error + Send + Sync>> {
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            spawn_query_actor(scraper_actor, analyzer_actor, history_actor),
+        )
+        .await
+        {
+            Ok(actor) => Ok(actor),
+            Err(_) => Err("Query actor spawn timed out".into()),
+        }
     }
 
     /// Process a user query and return analysis response

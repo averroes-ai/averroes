@@ -66,6 +66,21 @@ constructor(
                 Log.d("FiqhAIViewModel", "Initializing FiqhAIManager with config...")
                 Log.d("FiqhAIViewModel", "Config database path: ${config.databasePath}")
 
+                // Run diagnostic test first to isolate crash point
+                Log.d("FiqhAIViewModel", "🧪 Running native library diagnostic test...")
+                if (!fiqhManager.testNativeLibrary()) {
+                    Log.e(
+                            "FiqhAIViewModel",
+                            "❌ Native library diagnostic test failed - aborting initialization"
+                    )
+                    initializationFailed = true
+                    return false
+                }
+                Log.d(
+                        "FiqhAIViewModel",
+                        "✅ Native library diagnostic test passed - proceeding with full initialization"
+                )
+
                 fiqhManager.initialize(context, config)
 
                 // Verify initialization worked

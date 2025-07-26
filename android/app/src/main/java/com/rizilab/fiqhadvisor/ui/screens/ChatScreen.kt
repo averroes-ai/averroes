@@ -368,19 +368,128 @@ private fun sendMessage(
             )
     onMessageAdded(userMessage)
 
-    // Check if it's a token analysis request
-    val tokenPattern = Regex("\\b[A-Z]{2,10}\\b") // Simple token pattern
-    val foundTokens = tokenPattern.findAll(text.uppercase()).map { it.value }.toList()
+    // Check if it's a token analysis request - be more specific about token detection
+    val knownTokens =
+            listOf(
+                    "BTC",
+                    "ETH",
+                    "SOL",
+                    "ADA",
+                    "DOT",
+                    "MATIC",
+                    "AVAX",
+                    "ATOM",
+                    "NEAR",
+                    "FTM",
+                    "ALGO",
+                    "XRP",
+                    "LTC",
+                    "BCH",
+                    "DOGE",
+                    "SHIB",
+                    "UNI",
+                    "LINK",
+                    "AAVE",
+                    "COMP",
+                    "CAKE",
+                    "BNB",
+                    "USDT",
+                    "USDC",
+                    "DAI",
+                    "BUSD"
+            )
+    val tokenPattern = Regex("\\b(${knownTokens.joinToString("|")})\\b", RegexOption.IGNORE_CASE)
+    val foundTokens = tokenPattern.findAll(text).map { it.value.uppercase() }.toList()
 
-    if (foundTokens.isNotEmpty() &&
+    // Also check for common token words like "bitcoin", "ethereum", etc.
+    val tokenWords =
+            mapOf(
+                    "bitcoin" to "BTC",
+                    "ethereum" to "ETH",
+                    "solana" to "SOL",
+                    "cardano" to "ADA",
+                    "polkadot" to "DOT"
+            )
+
+    val foundTokenWords =
+            tokenWords.entries.find { (word, _) -> text.contains(word, ignoreCase = true) }
+
+    // Debug logging
+    android.util.Log.d("ChatScreen", "Input text: '$text'")
+    android.util.Log.d("ChatScreen", "Found tokens: $foundTokens")
+    android.util.Log.d(
+            "ChatScreen",
+            "Found token words: ${foundTokenWords?.key} -> ${foundTokenWords?.value}"
+    )
+
+    if ((foundTokens.isNotEmpty() || foundTokenWords != null) &&
                     (text.contains("analyze", ignoreCase = true) ||
                             text.contains("halal", ignoreCase = true) ||
                             text.contains("haram", ignoreCase = true))
     ) {
-        // Analyze the first found token
-        viewModel.analyzeToken(foundTokens.first())
+        // Analyze the found token
+        val tokenToAnalyze = foundTokens.firstOrNull() ?: foundTokenWords?.value ?: "BTC"
+
+        // Safeguard: Don't analyze invalid tokens like "IS", "TO", "THE", etc.
+        val invalidTokens =
+                listOf(
+                        "IS",
+                        "TO",
+                        "THE",
+                        "OF",
+                        "AND",
+                        "OR",
+                        "IN",
+                        "ON",
+                        "AT",
+                        "BY",
+                        "FOR",
+                        "FROM",
+                        "UP",
+                        "OUT",
+                        "AS",
+                        "BE",
+                        "DO",
+                        "GET",
+                        "GO",
+                        "HAS",
+                        "HAD",
+                        "HIM",
+                        "HER",
+                        "HIS",
+                        "HOW",
+                        "ITS",
+                        "MAY",
+                        "NEW",
+                        "NOW",
+                        "OLD",
+                        "SEE",
+                        "TWO",
+                        "WHO",
+                        "BOY",
+                        "DID",
+                        "HAS",
+                        "LET",
+                        "PUT",
+                        "SAY",
+                        "SHE",
+                        "TOO",
+                        "USE"
+                )
+
+        if (tokenToAnalyze.uppercase() in invalidTokens) {
+            android.util.Log.d(
+                    "ChatScreen",
+                    "Invalid token '$tokenToAnalyze' detected, using chat instead"
+            )
+            viewModel.sendChatMessage(text)
+        } else {
+            android.util.Log.d("ChatScreen", "Analyzing token: $tokenToAnalyze")
+            viewModel.analyzeToken(tokenToAnalyze)
+        }
     } else {
         // For general chat messages, use the chat session functionality
+        android.util.Log.d("ChatScreen", "Using chat message for: $text")
         viewModel.sendChatMessage(text)
     }
 }

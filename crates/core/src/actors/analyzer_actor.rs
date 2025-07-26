@@ -62,7 +62,8 @@ pub struct AnalyzerActor {
     receiver: mpsc::Receiver<AnalyzerMessage>,
 
     #[allow(dead_code)]
-    solana_client: RpcClient,
+    solana_rpc_url: Option<String>, // Store URL instead of client
+    solana_client: Arc<Mutex<Option<Arc<RpcClient>>>>, // Use Arc<RpcClient> for sharing
     analysis_cache: Arc<RwLock<HashMap<Uuid, TokenAnalysis>>>,
     islamic_chain: Arc<Mutex<Option<IslamicChain>>>,
     backtest_chain: Arc<Mutex<Option<BacktestChain>>>,
@@ -103,13 +104,13 @@ impl AnalyzerActor {
     ) -> Self {
         let config = config.unwrap_or_default();
 
-        let solana_client =
-            RpcClient::new(solana_rpc_url.unwrap_or_else(|| "https://api.mainnet-beta.solana.com".to_owned()));
+        // Store URL instead of creating client immediately to avoid network operations during init
+        let rpc_url = solana_rpc_url.unwrap_or_else(|| "https://api.mainnet-beta.solana.com".to_owned());
 
         Self {
             receiver,
-
-            solana_client,
+            solana_rpc_url: Some(rpc_url),
+            solana_client: Arc::new(Mutex::new(None)), // Client will be created lazily when needed
             analysis_cache: Arc::new(RwLock::new(HashMap::new())),
             islamic_chain: Arc::new(Mutex::new(None)),
             backtest_chain: Arc::new(Mutex::new(None)),
@@ -117,6 +118,24 @@ impl AnalyzerActor {
             config,
             ai_service,
         }
+    }
+
+    /// Get or create Solana RPC client lazily
+    async fn get_solana_client(&self) -> Result<Arc<RpcClient>, AnalyzerError> {
+        let mut client_guard = self.solana_client.lock().await;
+
+        if client_guard.is_none() {
+            if let Some(ref url) = self.solana_rpc_url {
+                info!("Creating Solana RPC client for: {}", url);
+                let client = RpcClient::new(url.clone());
+                *client_guard = Some(Arc::new(client));
+            } else {
+                return Err(AnalyzerError::InitializationFailed("No Solana RPC URL provided".to_string()));
+            }
+        }
+
+        // Clone the Arc for use
+        Ok(client_guard.as_ref().unwrap().clone())
     }
 
     pub async fn run(&mut self) {
@@ -692,11 +711,12 @@ impl AnalyzerActor {
 // Following the proper actor pattern from https://ryhl.io/blog/actors-with-tokio/
 pub async fn spawn_analyzer_actor(
     solana_rpc_url: Option<String>,
+    config: Option<AnalyzerConfig>,
     ai_service: Arc<crate::ai::AIService>,
 ) -> crate::models::messages::AnalyzerActorHandle {
     let (sender, receiver) = mpsc::channel(32);
 
-    let mut actor = AnalyzerActor::new(receiver, solana_rpc_url, None, ai_service).await;
+    let mut actor = AnalyzerActor::new(receiver, solana_rpc_url, config, ai_service).await;
 
     tokio::spawn(async move {
         actor.run().await;
@@ -901,7 +921,7 @@ mod tests {
         };
         let ai_service = Arc::new(crate::ai::AIService::new(&config).await.unwrap());
 
-        let handle = spawn_analyzer_actor(None, ai_service).await;
+        let handle = spawn_analyzer_actor(None, None, ai_service).await;
         assert!(handle.sender.capacity() > 0);
     }
 
