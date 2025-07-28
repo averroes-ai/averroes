@@ -1,21 +1,10 @@
 package com.rizilab.fiqhadvisor.di
 
-import android.content.Context
-import com.rizilab.fiqhadvisor.core.FiqhAIManager
-import dagger.Module
-import dagger.Provides
-import dagger.hilt.InstallIn
-import dagger.hilt.android.qualifiers.ApplicationContext
-import dagger.hilt.components.SingletonComponent
-import javax.inject.Singleton
-
-@Module
-@InstallIn(SingletonComponent::class)
+/**
+ * Simplified DI - using singleton pattern instead of Hilt for now
+ * FiqhAIManager uses getInstance() pattern
+ */
 object AppModule {
-    
-    @Provides
-    @Singleton
-    fun provideFiqhAIManager(@ApplicationContext context: Context): FiqhAIManager {
-        return FiqhAIManager()
-    }
+    // No complex DI needed for core testing
+    // FiqhAIManager.getInstance() provides the singleton
 }

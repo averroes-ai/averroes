@@ -5,7 +5,7 @@ members = [
     "crates/web",
     "crates/dekstop",
     "crates/backend",
-    "benches",
+    # "benches",
 ]
 
 [workspace.package]
@@ -164,7 +164,7 @@ reqwest = { version = "0.12.15", default-features = false, features = [
     "cookies",
     "http2",
     "blocking",
-    "rustls-tls",  # Use rustls instead of OpenSSL for Android compatibility
+    "rustls-tls", # Use rustls instead of OpenSSL for Android compatibility
 ] }
 axum = "0.8.4"
 tower = "0.5.1"
