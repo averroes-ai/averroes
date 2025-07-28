@@ -8,6 +8,7 @@ use log;
 use rig::client::CompletionClient;
 use rig::completion::Prompt;
 use rig::providers::groq;
+use tokio::runtime::Runtime;
 
 // ============================================================================
 // SIMPLE FIQH AI DATA STRUCTURES
@@ -59,6 +60,8 @@ impl Default for FiqhAIConfig {
 pub struct FiqhAISystem {
     // Use Mutex for interior mutability (UniFFI exports Arc<Self>)
     agent_type: Mutex<AgentType>,
+    // Shared Tokio runtime for all async operations (UniFFI best practice)
+    runtime: Runtime,
 }
 
 // Simple enum to handle different agent types
@@ -76,6 +79,10 @@ impl FiqhAISystem {
         log::warn!("🔥 RUST DEBUG: new_fiqh_ai() called!");
         log::warn!("🔥 RUST DEBUG: Creating FiqhAI system (sync constructor)");
 
+        // Create Tokio runtime for async operations (UniFFI best practice)
+        let runtime = Runtime::new()
+            .map_err(|e| FiqhAIError::InitializationError(format!("Failed to create Tokio runtime: {}", e)))?;
+
         // Start with mock, upgrade to Groq via async method
         let agent_type = Mutex::new(AgentType::Mock);
 
@@ -83,6 +90,7 @@ impl FiqhAISystem {
 
         Ok(Self {
             agent_type,
+            runtime,
         })
     }
 
@@ -90,35 +98,36 @@ impl FiqhAISystem {
     pub async fn initialize_groq_agent(&self) -> Result<(), FiqhAIError> {
         log::warn!("🔥 RUST DEBUG: initialize_groq_agent() called!");
 
-        // Create a Tokio runtime for this async operation (Android compatibility)
-        let rt = match tokio::runtime::Runtime::new() {
-            Ok(rt) => rt,
-            Err(e) => {
-                log::error!("❌ Failed to create Tokio runtime: {}", e);
-                return Err(FiqhAIError::InitializationError(format!("Tokio runtime error: {}", e)));
-            },
-        };
-
-        // Run the async logic on the Tokio runtime
-        rt.block_on(async {
+        // Use the shared runtime to spawn async task (UniFFI best practice)
+        let handle = self.runtime.spawn(async move {
             log::warn!("📡 Upgrading to Groq agent (async method)...");
 
             match Self::create_groq_agent().await {
                 Ok(agent) => {
                     log::warn!("✅ Groq agent created successfully!");
-
-                    // Use interior mutability to update agent (wrap in Arc)
-                    let mut agent_type = self.agent_type.lock().unwrap();
-                    *agent_type = AgentType::Groq(Arc::new(agent));
-
-                    Ok(())
+                    Ok(Arc::new(agent))
                 },
                 Err(e) => {
                     log::warn!("⚠️ Failed to create Groq agent: {e}, keeping mock");
                     Err(FiqhAIError::InitializationError(e.to_string()))
                 },
             }
-        })
+        });
+
+        // Await the spawned task
+        match handle.await {
+            Ok(Ok(agent)) => {
+                // Use interior mutability to update agent
+                let mut agent_type = self.agent_type.lock().unwrap();
+                *agent_type = AgentType::Groq(agent);
+                Ok(())
+            },
+            Ok(Err(e)) => Err(e),
+            Err(join_error) => {
+                log::error!("❌ Task join error: {}", join_error);
+                Err(FiqhAIError::InitializationError(format!("Task execution failed: {}", join_error)))
+            },
+        }
     }
 
     /// Analyze if a cryptocurrency is halal or haram
@@ -128,27 +137,18 @@ impl FiqhAISystem {
     ) -> Result<QueryResponse, FiqhAIError> {
         log::warn!("🔥 RUST DEBUG: analyze_token({}) called!", token);
 
-        // Create a Tokio runtime for this async operation (Android compatibility)
-        let rt = match tokio::runtime::Runtime::new() {
-            Ok(rt) => rt,
-            Err(e) => {
-                log::error!("❌ Failed to create Tokio runtime: {}", e);
-                return Err(FiqhAIError::InitializationError(format!("Tokio runtime error: {}", e)));
-            },
-        };
+        // Extract agent Arc or identify as Mock, outside the spawn
+        let (groq_agent, is_groq) = {
+            let agent_guard = self.agent_type.lock().unwrap();
+            match &*agent_guard {
+                AgentType::Groq(agent) => (Some(agent.clone()), true),
+                AgentType::Mock => (None, false),
+            }
+        }; // Guard is dropped here
 
-        // Run the async logic on the Tokio runtime
-        rt.block_on(async {
+        // Use the shared runtime to spawn async task (UniFFI best practice)
+        let handle = self.runtime.spawn(async move {
             log::info!("🔍 Analyzing token: {token}");
-
-            // Extract agent Arc or identify as Mock, completely outside async operations
-            let (groq_agent, is_groq) = {
-                let agent_guard = self.agent_type.lock().unwrap();
-                match &*agent_guard {
-                    AgentType::Groq(agent) => (Some(agent.clone()), true),
-                    AgentType::Mock => (None, false),
-                }
-            }; // Guard is dropped here
 
             let response = match groq_agent {
                 Some(agent) => {
@@ -199,7 +199,16 @@ impl FiqhAISystem {
                 ],
                 timestamp: chrono::Utc::now().timestamp() as u64,
             })
-        })
+        });
+
+        // Await the spawned task and handle join errors
+        match handle.await {
+            Ok(result) => result,
+            Err(join_error) => {
+                log::error!("❌ Task join error: {}", join_error);
+                Err(FiqhAIError::InitializationError(format!("Task execution failed: {}", join_error)))
+            },
+        }
     }
 
     /// Handle general queries about Islamic finance
@@ -209,27 +218,18 @@ impl FiqhAISystem {
     ) -> Result<QueryResponse, FiqhAIError> {
         log::warn!("🔥 RUST DEBUG: query({}) called!", question.chars().take(30).collect::<String>());
 
-        // Create a Tokio runtime for this async operation (Android compatibility)
-        let rt = match tokio::runtime::Runtime::new() {
-            Ok(rt) => rt,
-            Err(e) => {
-                log::error!("❌ Failed to create Tokio runtime: {}", e);
-                return Err(FiqhAIError::InitializationError(format!("Tokio runtime error: {}", e)));
-            },
-        };
+        // Extract agent Arc or identify as Mock, outside the spawn
+        let (groq_agent, is_groq) = {
+            let agent_guard = self.agent_type.lock().unwrap();
+            match &*agent_guard {
+                AgentType::Groq(agent) => (Some(agent.clone()), true),
+                AgentType::Mock => (None, false),
+            }
+        }; // Guard is dropped here
 
-        // Run the async logic on the Tokio runtime
-        rt.block_on(async {
+        // Use the shared runtime to spawn async task (UniFFI best practice)
+        let handle = self.runtime.spawn(async move {
             log::info!("🤔 Processing general query: {}", question.chars().take(50).collect::<String>());
-
-            // Extract agent Arc or identify as Mock, completely outside async operations
-            let (groq_agent, is_groq) = {
-                let agent_guard = self.agent_type.lock().unwrap();
-                match &*agent_guard {
-                    AgentType::Groq(agent) => (Some(agent.clone()), true),
-                    AgentType::Mock => (None, false),
-                }
-            }; // Guard is dropped here
 
             let response = match groq_agent {
                 Some(agent) => {
@@ -278,7 +278,16 @@ impl FiqhAISystem {
                 ],
                 timestamp: chrono::Utc::now().timestamp() as u64,
             })
-        })
+        });
+
+        // Await the spawned task and handle join errors
+        match handle.await {
+            Ok(result) => result,
+            Err(join_error) => {
+                log::error!("❌ Task join error: {}", join_error);
+                Err(FiqhAIError::InitializationError(format!("Task execution failed: {}", join_error)))
+            },
+        }
     }
 
     /// Check what type of agent is being used
