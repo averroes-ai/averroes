@@ -114,6 +114,94 @@ class FiqhAIViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    /** Stream token analysis for real-time UI updates */
+    fun analyzeTokenStream(
+            token: String,
+            onChunk: (String) -> Unit,
+            onComplete: () -> Unit = {},
+            onError: (String) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                _status.value = "🔍 Analyzing $token..."
+
+                Log.d(TAG, "Starting streaming analysis for: $token")
+
+                aiManager.analyzeTokenStream(
+                        token = token,
+                        onChunk = { chunk ->
+                            Log.d(TAG, "Received chunk: ${chunk.take(50)}...")
+                            // Update UI in real-time as chunks arrive
+                            onChunk(chunk)
+                        },
+                        onComplete = { finalResponse ->
+                            Log.d(TAG, "Analysis complete for $token")
+                            _lastResponse.value = finalResponse
+                            _status.value = "✅ Analysis complete"
+                            _isLoading.value = false
+                            onComplete()
+                        },
+                        onError = { error ->
+                            Log.e(TAG, "Analysis error: $error")
+                            _status.value = "❌ Analysis failed: $error"
+                            _isLoading.value = false
+                            onError(error)
+                        }
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Stream analysis failed", e)
+                _status.value = "❌ Analysis failed: ${e.message}"
+                _isLoading.value = false
+                onError("Analysis failed: ${e.message}")
+            }
+        }
+    }
+
+    /** Stream general query for real-time UI updates */
+    fun queryStream(
+            question: String,
+            onChunk: (String) -> Unit,
+            onComplete: () -> Unit = {},
+            onError: (String) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                _status.value = "🤔 Processing query..."
+
+                Log.d(TAG, "Starting streaming query: ${question.take(50)}...")
+
+                aiManager.queryStream(
+                        question = question,
+                        onChunk = { chunk ->
+                            Log.d(TAG, "Received chunk: ${chunk.take(50)}...")
+                            // Update UI in real-time as chunks arrive
+                            onChunk(chunk)
+                        },
+                        onComplete = { finalResponse ->
+                            Log.d(TAG, "Query complete")
+                            _lastResponse.value = finalResponse
+                            _status.value = "✅ Query complete"
+                            _isLoading.value = false
+                            onComplete()
+                        },
+                        onError = { error ->
+                            Log.e(TAG, "Query error: $error")
+                            _status.value = "❌ Query failed: $error"
+                            _isLoading.value = false
+                            onError(error)
+                        }
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Stream query failed", e)
+                _status.value = "❌ Query failed: ${e.message}"
+                _isLoading.value = false
+                onError("Query failed: ${e.message}")
+            }
+        }
+    }
+
     /** Update system information */
     fun updateSystemInfo() {
         _systemInfo.value = buildString {

@@ -30,6 +30,15 @@ pub struct QueryResponse {
     pub timestamp: u64,
 }
 
+// New: Streaming chunk for real-time responses
+#[derive(uniffi::Record, Clone, Debug)]
+pub struct StreamChunk {
+    pub query_id: String,
+    pub content: String,
+    pub is_final: bool,
+    pub chunk_index: u32,
+}
+
 #[derive(uniffi::Error, thiserror::Error, Debug)]
 pub enum FiqhAIError {
     #[error("Initialization error: {0}")]
@@ -40,6 +49,23 @@ pub enum FiqhAIError {
 
     #[error("Invalid query: {0}")]
     InvalidQuery(String),
+}
+
+// Callback trait for streaming responses (UniFFI compatible)
+#[uniffi::export(callback_interface)]
+pub trait StreamCallback: Send + Sync {
+    fn on_chunk(
+        &self,
+        chunk: StreamChunk,
+    );
+    fn on_error(
+        &self,
+        error: String,
+    );
+    fn on_complete(
+        &self,
+        final_response: QueryResponse,
+    );
 }
 
 impl Default for FiqhAIConfig {
@@ -290,6 +316,303 @@ impl FiqhAISystem {
         }
     }
 
+    /// Analyze if a cryptocurrency is halal or haram (with streaming)
+    pub async fn analyze_token_stream(
+        &self,
+        token: String,
+        callback: Box<dyn StreamCallback>,
+    ) -> Result<(), FiqhAIError> {
+        log::warn!("🔥 RUST DEBUG: analyze_token_stream({token}) called!");
+
+        let query_id = format!("token_{token}_{}", chrono::Utc::now().timestamp());
+
+        // Extract agent Arc or identify as Mock, outside the spawn
+        let (groq_agent, _is_groq) = {
+            let agent_guard = self.agent_type.lock().unwrap();
+            match &*agent_guard {
+                AgentType::Groq(agent) => (Some(agent.clone()), true),
+                AgentType::Mock => (None, false),
+            }
+        }; // Guard is dropped here
+
+        // Use the shared runtime to spawn async task (UniFFI best practice)
+        // All callback usage must happen inside this task
+        self.runtime
+            .spawn(async move {
+                log::info!("🔍 Analyzing token with streaming: {token}");
+
+                let result = match groq_agent {
+                    Some(agent) => {
+                        log::info!("🤖 Using Groq AI for streaming analysis...");
+
+                        let prompt = format!(
+                            "Analyze the cryptocurrency '{token}' from an Islamic finance perspective. 
+                         Consider factors like: speculation, utility, volatility, underlying technology.
+                         Provide a clear halal/haram ruling with reasoning."
+                        );
+
+                        // Use regular completion with simulated streaming
+                        match agent.prompt(&prompt).await {
+                            Ok(response) => {
+                                log::info!("✅ Got full response, simulating streaming...");
+                                // Clean and format the response for better readability
+                                let full_response = format_ai_response(&response);
+
+                                // Simulate streaming by breaking response into words
+                                let words: Vec<&str> = full_response.split_whitespace().collect();
+                                let mut accumulated = String::new();
+
+                                for (i, word) in words.iter().enumerate() {
+                                    if i > 0 {
+                                        accumulated.push(' ');
+                                    }
+                                    accumulated.push_str(word);
+
+                                    // Send chunk to callback
+                                    callback.on_chunk(StreamChunk {
+                                        query_id: query_id.clone(),
+                                        content: format!("{} ", word),
+                                        is_final: false,
+                                        chunk_index: i as u32,
+                                    });
+
+                                    // Small delay to simulate streaming
+                                    tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
+                                }
+
+                                // Send final response
+                                let final_response = QueryResponse {
+                                    query_id: query_id.clone(),
+                                    response: accumulated,
+                                    confidence: 0.9,
+                                    sources: vec![
+                                        "Islamic Finance Analysis".to_owned(),
+                                        "Groq AI (Streaming)".to_owned(),
+                                    ],
+                                    timestamp: chrono::Utc::now().timestamp() as u64,
+                                };
+
+                                callback.on_complete(final_response);
+                                Ok(())
+                            },
+                            Err(e) => {
+                                log::error!("❌ Groq API error: {e}");
+                                callback.on_error(format!("Groq API error: {e}"));
+                                Err(FiqhAIError::AIError(e.to_string()))
+                            },
+                        }
+                    },
+                    None => {
+                        log::info!("🎭 Using Mock agent for streaming analysis...");
+
+                        // Simulate streaming for mock response
+                        let mock_response = format!(
+                            "**{token} Analysis**\n\n🔴 **Ruling: Haram (Prohibited)**\n\n**Reasoning:** Excessive \
+                             volatility and speculation make {token} problematic under Islamic finance principles. \
+                             The lack of intrinsic value and speculative nature conflict with Sharia guidelines on \
+                             risk and uncertainty (gharar).\n\n**Recommendation:** Consult with qualified Islamic \
+                             scholars for personalized guidance."
+                        );
+
+                        // Simulate streaming by sending chunks with delays
+                        let words: Vec<&str> = mock_response.split_whitespace().collect();
+                        let mut accumulated = String::new();
+
+                        for (i, word) in words.iter().enumerate() {
+                            if i > 0 {
+                                accumulated.push(' ');
+                            }
+                            accumulated.push_str(word);
+
+                            callback.on_chunk(StreamChunk {
+                                query_id: query_id.clone(),
+                                content: format!("{} ", word),
+                                is_final: false,
+                                chunk_index: i as u32,
+                            });
+
+                            // Small delay to simulate streaming
+                            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                        }
+
+                        // Send final response
+                        let final_response = QueryResponse {
+                            query_id: query_id.clone(),
+                            response: accumulated,
+                            confidence: 0.8,
+                            sources: vec![
+                                "Islamic Finance Analysis".to_owned(),
+                                "Mock Response (Streaming)".to_owned(),
+                            ],
+                            timestamp: chrono::Utc::now().timestamp() as u64,
+                        };
+
+                        callback.on_complete(final_response);
+                        Ok(())
+                    },
+                };
+
+                // Handle any errors from the task execution
+                if let Err(e) = result {
+                    log::error!("❌ Task execution error: {e}");
+                }
+            })
+            .await
+            .map_err(|join_error| {
+                log::error!("❌ Task join error: {join_error}");
+                FiqhAIError::InitializationError(format!("Task execution failed: {join_error}"))
+            })?;
+
+        Ok(())
+    }
+
+    /// Handle general queries about Islamic finance (with streaming)
+    pub async fn query_stream(
+        &self,
+        question: String,
+        callback: Box<dyn StreamCallback>,
+    ) -> Result<(), FiqhAIError> {
+        log::warn!("🔥 RUST DEBUG: query_stream({}) called!", question.chars().take(30).collect::<String>());
+
+        let query_id = format!("query_{}", chrono::Utc::now().timestamp());
+
+        // Extract agent Arc or identify as Mock, outside the spawn
+        let (groq_agent, _is_groq) = {
+            let agent_guard = self.agent_type.lock().unwrap();
+            match &*agent_guard {
+                AgentType::Groq(agent) => (Some(agent.clone()), true),
+                AgentType::Mock => (None, false),
+            }
+        }; // Guard is dropped here
+
+        // Use the shared runtime to spawn async task (UniFFI best practice)
+        // All callback usage must happen inside this task
+        self.runtime
+            .spawn(async move {
+                log::info!("🤔 Processing query with streaming: {}", question.chars().take(50).collect::<String>());
+
+                let result = match groq_agent {
+                    Some(agent) => {
+                        log::info!("🤖 Using Groq AI for streaming query...");
+
+                        let prompt = format!(
+                            "From an Islamic finance and Fiqh perspective, please answer: {question}
+                         Provide clear guidance based on Sharia principles and recommend consulting scholars when \
+                             appropriate."
+                        );
+
+                        // Use regular completion with simulated streaming
+                        match agent.prompt(&prompt).await {
+                            Ok(response) => {
+                                log::info!("✅ Got full response, simulating streaming...");
+                                // Clean and format the response for better readability
+                                let full_response = format_ai_response(&response);
+
+                                // Simulate streaming by breaking response into words
+                                let words: Vec<&str> = full_response.split_whitespace().collect();
+                                let mut accumulated = String::new();
+
+                                for (i, word) in words.iter().enumerate() {
+                                    if i > 0 {
+                                        accumulated.push(' ');
+                                    }
+                                    accumulated.push_str(word);
+
+                                    // Send chunk to callback
+                                    callback.on_chunk(StreamChunk {
+                                        query_id: query_id.clone(),
+                                        content: format!("{} ", word),
+                                        is_final: false,
+                                        chunk_index: i as u32,
+                                    });
+
+                                    // Small delay to simulate streaming
+                                    tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
+                                }
+
+                                // Send final response
+                                let final_response = QueryResponse {
+                                    query_id: query_id.clone(),
+                                    response: accumulated,
+                                    confidence: 0.9,
+                                    sources: vec![
+                                        "Islamic Finance Knowledge".to_owned(),
+                                        "Groq AI (Streaming)".to_owned(),
+                                    ],
+                                    timestamp: chrono::Utc::now().timestamp() as u64,
+                                };
+
+                                callback.on_complete(final_response);
+                                Ok(())
+                            },
+                            Err(e) => {
+                                log::error!("❌ Groq API error: {e}");
+                                callback.on_error(format!("Groq API error: {e}"));
+                                Err(FiqhAIError::AIError(e.to_string()))
+                            },
+                        }
+                    },
+                    None => {
+                        log::info!("🎭 Using Mock agent for streaming query...");
+
+                        // Mock streaming response
+                        let mock_response = "**Mock Response**\n\nThis is a simulated streaming response for testing \
+                                             purposes. In the real implementation, this would provide Islamic finance \
+                                             guidance based on your question. Please consult qualified Islamic \
+                                             scholars for actual religious guidance.";
+
+                        // Simulate streaming by sending chunks with delays
+                        let words: Vec<&str> = mock_response.split_whitespace().collect();
+                        let mut accumulated = String::new();
+
+                        for (i, word) in words.iter().enumerate() {
+                            if i > 0 {
+                                accumulated.push(' ');
+                            }
+                            accumulated.push_str(word);
+
+                            callback.on_chunk(StreamChunk {
+                                query_id: query_id.clone(),
+                                content: format!("{} ", word),
+                                is_final: false,
+                                chunk_index: i as u32,
+                            });
+
+                            // Small delay to simulate streaming
+                            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                        }
+
+                        // Send final response
+                        let final_response = QueryResponse {
+                            query_id: query_id.clone(),
+                            response: accumulated,
+                            confidence: 0.7,
+                            sources: vec![
+                                "Islamic Finance Knowledge".to_owned(),
+                                "Mock Response (Streaming)".to_owned(),
+                            ],
+                            timestamp: chrono::Utc::now().timestamp() as u64,
+                        };
+
+                        callback.on_complete(final_response);
+                        Ok(())
+                    },
+                };
+
+                // Handle any errors from the task execution
+                if let Err(e) = result {
+                    log::error!("❌ Task execution error: {e}");
+                }
+            })
+            .await
+            .map_err(|join_error| {
+                log::error!("❌ Task join error: {join_error}");
+                FiqhAIError::InitializationError(format!("Task execution failed: {join_error}"))
+            })?;
+
+        Ok(())
+    }
+
     /// Check what type of agent is being used
     pub fn get_agent_info(&self) -> String {
         log::warn!("🔥 RUST DEBUG: get_agent_info() called!");
@@ -337,6 +660,38 @@ impl FiqhAISystem {
 
         Ok(agent)
     }
+}
+
+/// Format AI response with proper paragraphs and structure for better readability
+fn format_ai_response(raw_response: &str) -> String {
+    // Remove thinking tags and clean up
+    let cleaned = raw_response.replace("<think>", "").replace("</think>", "").trim().to_string();
+
+    // Add paragraph breaks for better readability
+    let formatted = cleaned
+        .replace(". In", ".\n\nIn")
+        .replace(". Islamic", ".\n\nIslamic")
+        .replace(". From", ".\n\nFrom")
+        .replace(". However", ".\n\nHowever")
+        .replace(". Therefore", ".\n\nTherefore")
+        .replace(". Overall", ".\n\nOverall")
+        .replace(". Key", ".\n\n• Key")
+        .replace(". Important", ".\n\n• Important")
+        .replace("1. ", "\n\n1. ")
+        .replace("2. ", "\n2. ")
+        .replace("3. ", "\n3. ")
+        .replace("4. ", "\n4. ")
+        .replace("5. ", "\n5. ");
+
+    // Clean up multiple newlines
+    let final_text = formatted
+        .split('\n')
+        .map(|line| line.trim())
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<&str>>()
+        .join("\n\n");
+
+    final_text
 }
 
 // ============================================================================

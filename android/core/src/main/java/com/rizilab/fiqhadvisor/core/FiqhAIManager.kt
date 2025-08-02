@@ -124,4 +124,98 @@ class FiqhAIManager {
             false
         }
     }
+
+    /** Analyze a cryptocurrency token with streaming response */
+    suspend fun analyzeTokenStream(
+            token: String,
+            onChunk: (String) -> Unit = {},
+            onComplete: (String) -> Unit = {},
+            onError: (String) -> Unit = {}
+    ) {
+        Log.d(TAG, "🔍 Starting streaming analysis for token: $token")
+
+        try {
+            if (aiSystem == null) {
+                Log.e(TAG, "❌ AI system not initialized!")
+                onError("Error: AI system not initialized")
+                return
+            }
+
+            var accumulatedResponse = ""
+
+            val callback =
+                    StreamingCallback(
+                            onChunk = { chunk: StreamChunk ->
+                                accumulatedResponse += chunk.content
+                                onChunk(accumulatedResponse) // Send accumulated content to UI
+                            },
+                            onError = { error: String ->
+                                Log.e(TAG, "❌ Streaming error: $error")
+                                onError(error)
+                            },
+                            onComplete = { finalResponse: QueryResponse ->
+                                Log.d(TAG, "✅ Streaming analysis completed for $token")
+                                Log.d(
+                                        TAG,
+                                        "📊 Final confidence: ${(finalResponse.confidence * 100).toInt()}%"
+                                )
+                                onComplete(finalResponse.response)
+                            }
+                    )
+
+            // Call the streaming method from Rust
+            aiSystem!!.analyzeTokenStream(token, callback)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Streaming token analysis failed: ${e.javaClass.simpleName}: ${e.message}")
+            e.printStackTrace()
+            onError("Error: ${e.message}")
+        }
+    }
+
+    /** Process a general query with streaming response */
+    suspend fun queryStream(
+            question: String,
+            onChunk: (String) -> Unit = {},
+            onComplete: (String) -> Unit = {},
+            onError: (String) -> Unit = {}
+    ) {
+        Log.d(TAG, "🤔 Starting streaming query: ${question.take(50)}")
+
+        try {
+            if (aiSystem == null) {
+                Log.e(TAG, "❌ AI system not initialized!")
+                onError("Error: AI system not initialized")
+                return
+            }
+
+            var accumulatedResponse = ""
+
+            val callback =
+                    StreamingCallback(
+                            onChunk = { chunk: StreamChunk ->
+                                accumulatedResponse += chunk.content
+                                onChunk(accumulatedResponse) // Send accumulated content to UI
+                            },
+                            onError = { error: String ->
+                                Log.e(TAG, "❌ Streaming error: $error")
+                                onError(error)
+                            },
+                            onComplete = { finalResponse: QueryResponse ->
+                                Log.d(TAG, "✅ Streaming query completed")
+                                Log.d(
+                                        TAG,
+                                        "📊 Final confidence: ${(finalResponse.confidence * 100).toInt()}%"
+                                )
+                                onComplete(finalResponse.response)
+                            }
+                    )
+
+            // Call the streaming method from Rust
+            aiSystem!!.queryStream(question, callback)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Streaming query failed: ${e.javaClass.simpleName}: ${e.message}")
+            e.printStackTrace()
+            onError("Error: ${e.message}")
+        }
+    }
 }
