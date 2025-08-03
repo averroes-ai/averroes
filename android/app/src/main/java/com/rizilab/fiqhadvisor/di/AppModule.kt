@@ -1,4 +1,4 @@
-package com.rizilab.fiqhadvisor.di
+package com.rizilab.averroes.di
 
 /**
  * Simplified DI - using singleton pattern instead of Hilt for now

@@ -1,6 +1,6 @@
-# FiqhAdvisor AI System Diagnostic Guide
+# averroes AI System Diagnostic Guide
 
-This guide provides comprehensive instructions for testing and diagnosing the FiqhAdvisor AI system integration.
+This guide provides comprehensive instructions for testing and diagnosing the averroes AI system integration.
 
 ## 📋 Table of Contents
 
@@ -15,7 +15,7 @@ This guide provides comprehensive instructions for testing and diagnosing the Fi
 
 ## 🎯 Overview
 
-The FiqhAdvisor app includes comprehensive diagnostic tools to test and monitor the AI system integration. These tools help verify:
+The averroes app includes comprehensive diagnostic tools to test and monitor the AI system integration. These tools help verify:
 
 - ✅ API key configuration (Grok and Groq)
 - ✅ System initialization and UniFFI bindings
@@ -37,7 +37,7 @@ adb devices
 ### Project Setup
 ```bash
 # Ensure project is built
-cd /path/to/fiqhadvisor
+cd /path/to/averroes
 cargo build
 
 # Ensure Android project is ready
@@ -49,7 +49,7 @@ cd android
 
 ### 1. Automatic Startup Diagnostics
 
-The app automatically runs diagnostics during startup in `FiqhAdvisorApplication.onCreate()`:
+The app automatically runs diagnostics during startup in `averroesApplication.onCreate()`:
 
 ```kotlin
 AISystemDiagnostics.runComprehensiveDiagnostics()
@@ -89,7 +89,7 @@ viewModel.testAIResponse("Is Bitcoin halal?")
 ```
 
 **Menu Options:**
-1. **Monitor all FiqhAdvisor logs** - Real-time log monitoring
+1. **Monitor all averroes logs** - Real-time log monitoring
 2. **Monitor AI diagnostics only** - Focused diagnostic output
 3. **Save logs to file (60 seconds)** - Capture logs for analysis
 4. **Install and launch app** - Build, install, and start the app
@@ -129,7 +129,7 @@ adb devices
 adb logcat -c
 
 # 3. Verify project compilation
-cd /path/to/fiqhadvisor
+cd /path/to/averroes
 cargo build
 ```
 
@@ -138,8 +138,8 @@ cargo build
 Open a terminal window and start monitoring:
 
 ```bash
-# Monitor all FiqhAdvisor related logs
-adb logcat -v time | grep -E "(FiqhAdvisor|AISystemDiagnostics|FiqhAIViewModel|uniffi|fiqh)" --color=always
+# Monitor all averroes related logs
+adb logcat -v time | grep -E "(averroes|AISystemDiagnostics|FiqhAIViewModel|uniffi|fiqh)" --color=always
 ```
 
 **Alternative monitoring options:**
@@ -148,7 +148,7 @@ adb logcat -v time | grep -E "(FiqhAdvisor|AISystemDiagnostics|FiqhAIViewModel|u
 adb logcat -v time | grep "AISystemDiagnostics" --color=always
 
 # Monitor with timestamps and save to file
-adb logcat -v time | grep -i fiqh | tee fiqhadvisor_logs.txt
+adb logcat -v time | grep -i fiqh | tee averroes_logs.txt
 
 # Monitor errors only
 adb logcat *:E | grep -i fiqh
@@ -160,7 +160,7 @@ In a second terminal window:
 
 ```bash
 # Navigate to Android project
-cd /path/to/fiqhadvisor/android
+cd /path/to/averroes/android
 
 # Build and install debug version
 ./gradlew installDebug
@@ -173,7 +173,7 @@ cd /path/to/fiqhadvisor/android
 
 ```bash
 # Launch the app
-adb shell am start -n com.rizilab.fiqhadvisor/.MainActivity
+adb shell am start -n com.rizilab.averroes/.MainActivity
 
 # Watch the first terminal for diagnostic output
 ```
@@ -243,7 +243,7 @@ FiqhAIViewModel: AI response received: AI System Diagnostic: System initialized.
 **Solutions:**
 ```bash
 # 1. Check if app is actually starting
-adb logcat | grep "FiqhAdvisor"
+adb logcat | grep "averroes"
 
 # 2. Verify log filtering
 adb logcat | grep -i diagnostic
@@ -252,7 +252,7 @@ adb logcat | grep -i diagnostic
 adb logcat | grep -E "(FATAL|AndroidRuntime)"
 
 # 4. Monitor all app logs
-adb logcat | grep "com.rizilab.fiqhadvisor"
+adb logcat | grep "com.rizilab.averroes"
 ```
 
 ### Issue: System Initialization Fails
@@ -271,7 +271,7 @@ adb logcat | grep "uniffi"
 adb logcat | grep -E "(JNI|native|library)"
 
 # 3. Check Rust compilation
-cd /path/to/fiqhadvisor
+cd /path/to/averroes
 cargo build
 
 # 4. Verify Android targets built
@@ -346,7 +346,7 @@ adb logcat | grep "permission"
 adb logcat | grep -E "(UnsatisfiedLinkError|library)"
 
 # 4. Clear app data and retry
-adb shell pm clear com.rizilab.fiqhadvisor
+adb shell pm clear com.rizilab.averroes
 ```
 
 ## 🔍 Advanced Debugging
@@ -355,26 +355,26 @@ adb shell pm clear com.rizilab.fiqhadvisor
 
 ```bash
 # Save comprehensive logs
-adb logcat -v threadtime > fiqhadvisor_debug_$(date +%Y%m%d_%H%M%S).log
+adb logcat -v threadtime > averroes_debug_$(date +%Y%m%d_%H%M%S).log
 
 # Filter by specific components
 adb logcat | grep -E "(FiqhAI|uniffi|rust)" > rust_integration.log
 
 # Monitor memory usage
-adb shell dumpsys meminfo com.rizilab.fiqhadvisor
+adb shell dumpsys meminfo com.rizilab.averroes
 ```
 
 ### Performance Monitoring
 
 ```bash
 # Monitor CPU usage
-adb shell top | grep fiqhadvisor
+adb shell top | grep averroes
 
 # Check network activity
-adb shell netstat | grep fiqhadvisor
+adb shell netstat | grep averroes
 
 # Monitor battery usage
-adb shell dumpsys batterystats | grep fiqhadvisor
+adb shell dumpsys batterystats | grep averroes
 ```
 
 ### Testing Different Scenarios
@@ -399,7 +399,7 @@ adb shell svc data enable
 
 ```bash
 # Start comprehensive monitoring
-adb logcat -v time | grep -E "(FiqhAdvisor|AISystemDiagnostics|FiqhAIViewModel)" --color=always
+adb logcat -v time | grep -E "(averroes|AISystemDiagnostics|FiqhAIViewModel)" --color=always
 
 # Monitor diagnostics only
 adb logcat | grep "AISystemDiagnostics"
@@ -418,16 +418,16 @@ adb logcat | grep -i fiqh > logs_$(date +%Y%m%d_%H%M%S).txt
 ./gradlew installDebug
 
 # Launch app
-adb shell am start -n com.rizilab.fiqhadvisor/.MainActivity
+adb shell am start -n com.rizilab.averroes/.MainActivity
 
 # Force stop app
-adb shell am force-stop com.rizilab.fiqhadvisor
+adb shell am force-stop com.rizilab.averroes
 
 # Clear app data
-adb shell pm clear com.rizilab.fiqhadvisor
+adb shell pm clear com.rizilab.averroes
 
 # Uninstall app
-adb uninstall com.rizilab.fiqhadvisor
+adb uninstall com.rizilab.averroes
 ```
 
 ### System Information Commands
@@ -440,7 +440,7 @@ adb shell getprop ro.build.version.release
 adb shell df /data
 
 # Check running processes
-adb shell ps | grep fiqhadvisor
+adb shell ps | grep averroes
 
 # Check device connectivity
 adb shell ping -c 3 8.8.8.8

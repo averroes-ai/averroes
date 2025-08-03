@@ -1,4 +1,4 @@
-package com.rizilab.fiqhadvisor
+package com.rizilab.averroes
 
 import android.os.Bundle
 import android.util.Log
@@ -9,10 +9,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.rizilab.fiqhadvisor.ui.screens.AuthScreen
-import com.rizilab.fiqhadvisor.ui.screens.ChatScreen
-import com.rizilab.fiqhadvisor.ui.screens.SplashScreen
-import com.rizilab.fiqhadvisor.ui.viewmodel.FiqhAIViewModel
+import com.rizilab.averroes.ui.screens.AuthScreen
+import com.rizilab.averroes.ui.screens.ChatScreen
+import com.rizilab.averroes.ui.screens.SplashScreen
+import com.rizilab.averroes.ui.viewmodel.FiqhAIViewModel
 
 /** Navigation state for the app */
 enum class AppScreen {
@@ -21,25 +21,25 @@ enum class AppScreen {
     CHAT
 }
 
-/** Main Activity for FiqhAdvisor - Islamic Finance AI Assistant */
+/** Main Activity for averroes - Islamic Finance AI Assistant */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Log.d("MainActivity", "🚀 Starting FiqhAdvisor App")
+        Log.d("MainActivity", "🚀 Starting averroes App")
 
         setContent {
             MaterialTheme {
                 Surface(
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.background
-                ) { FiqhAdvisorApp() }
+                ) { averroesApp() }
             }
         }
     }
 }
 
 @Composable
-fun FiqhAdvisorApp() {
+fun averroesApp() {
     var currentScreen by remember { mutableStateOf(AppScreen.SPLASH) }
     val viewModel: FiqhAIViewModel = viewModel()
 

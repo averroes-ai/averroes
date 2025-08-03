@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# FiqhAdvisor Fallback Response Debugging Script
+# averroes Fallback Response Debugging Script
 # This script helps debug why the AI system is returning fallback responses
 
-echo "🔍 FiqhAdvisor Fallback Response Debugger"
+echo "🔍 averroes Fallback Response Debugger"
 echo "========================================"
 
 # Function to check if adb is available
@@ -80,14 +80,14 @@ run_diagnostic_test() {
     prepare_monitoring
     
     echo "📱 Installing and launching app..."
-    cd /mnt/d/Engineer/web3/rizilab/fiqhadvisor/android
+    cd /mnt/d/Engineer/web3/rizilab/averroes/android
     
     # Build and install
     if ./gradlew installDebug --quiet; then
         echo "✅ App installed successfully"
         
         # Launch app
-        adb shell am start -n com.rizilab.fiqhadvisor/.MainActivity
+        adb shell am start -n com.rizilab.averroes/.MainActivity
         echo "🚀 App launched"
         
         echo "⏱️  Monitoring for 30 seconds..."
@@ -105,7 +105,7 @@ run_diagnostic_test() {
 
 # Function to save diagnostic logs
 save_diagnostic_logs() {
-    local filename="fiqhadvisor_fallback_debug_$(date +%Y%m%d_%H%M%S).log"
+    local filename="averroes_fallback_debug_$(date +%Y%m%d_%H%M%S).log"
     echo "💾 Saving diagnostic logs to $filename..."
     echo "Launch the app and perform a query, then press Ctrl+C"
     

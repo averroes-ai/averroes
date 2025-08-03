@@ -226,7 +226,7 @@ build-rust-ios:
 run-android:
     @echo "📱 Running Android app..."
     cd android && ./gradlew installDebug
-    adb shell am start -n com.rizilab.fiqhadvisor/.MainActivity
+    adb shell am start -n com.rizilab.averroes/.MainActivity
 
 # Run Android instrumentation tests
 test-android:

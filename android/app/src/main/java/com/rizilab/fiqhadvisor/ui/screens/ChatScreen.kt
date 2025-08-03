@@ -1,4 +1,4 @@
-package com.rizilab.fiqhadvisor.ui.screens
+package com.rizilab.averroes.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -90,7 +90,7 @@ fun ChatScreen(
                                 id = "welcome",
                                 timestamp = System.currentTimeMillis(),
                                 content =
-                                        "Welcome to FiqhAdvisor! I'm here to help you with Islamic finance questions. You can ask me about cryptocurrency analysis, investment principles, or any Shariah-related financial matters.",
+                                        "Welcome to averroes! I'm here to help you with Islamic finance questions. You can ask me about cryptocurrency analysis, investment principles, or any Shariah-related financial matters.",
                                 type = SystemMessageType.WELCOME
                         )
                 )
@@ -112,7 +112,7 @@ fun ChatScreen(
                             modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                                text = "FiqhAdvisor Chat",
+                                text = "averroes Chat",
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF1E293B)

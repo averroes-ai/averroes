@@ -1,4 +1,4 @@
-package com.rizilab.fiqhadvisor.ui.screens
+package com.rizilab.averroes.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -81,7 +81,7 @@ fun AuthScreen(onAuthSuccess: () -> Unit = {}, onSkipAuth: () -> Unit = {}) {
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                    text = "FiqhAdvisor",
+                    text = "averroes",
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White

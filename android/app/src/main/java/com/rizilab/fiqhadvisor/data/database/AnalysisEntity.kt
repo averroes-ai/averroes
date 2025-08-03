@@ -1,4 +1,4 @@
-package com.rizilab.fiqhadvisor.data.database
+package com.rizilab.averroes.data.database
 
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow

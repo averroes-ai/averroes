@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.rizilab.fiqhadvisor.core"
+    namespace = "com.rizilab.averroes.core"
     compileSdk = 34
     ndkVersion = "29.0.13599879"
 

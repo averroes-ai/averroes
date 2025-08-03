@@ -1,10 +1,10 @@
-package com.rizilab.fiqhadvisor.ui.viewmodel
+package com.rizilab.averroes.ui.viewmodel
 
 import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.rizilab.fiqhadvisor.core.FiqhAIManager
+import com.rizilab.averroes.core.FiqhAIManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

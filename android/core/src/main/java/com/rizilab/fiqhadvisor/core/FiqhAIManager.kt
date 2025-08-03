@@ -1,7 +1,7 @@
-package com.rizilab.fiqhadvisor.core
+package com.rizilab.averroes.core
 
 import android.util.Log
-import com.rizilab.fiqhadvisor.fiqhcore.*
+import com.rizilab.averroes.fiqhcore.*
 
 /** Manager class for FiqhAI system integration Handles initialization and core AI operations */
 class FiqhAIManager {

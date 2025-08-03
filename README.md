@@ -1,6 +1,6 @@
 # Fiqh Advisor - Your Sharia Trading Assistance
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/rizilab/fiqhadvisor)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/rizilab/averroes)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.80+-orange.svg)](https://www.rust-lang.org)
 [![Android](https://img.shields.io/badge/android-api%2024+-green.svg)](https://developer.android.com)
@@ -126,8 +126,8 @@ The Rust core uses an actor-based architecture for concurrent operations:
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/rizilab/fiqhadvisor.git
-   cd fiqhadvisor
+   git clone https://github.com/rizilab/averroes.git
+   cd averroes
    ```
 
 2. **Set up Rust toolchain**
@@ -205,15 +205,15 @@ adb logcat -v time | grep "AISystemDiagnostics" --color=always
 ## 📱 Project Structure
 
 ```
-fiqhadvisor/
+averroes/
 ├── android/                    # Android application
 │   ├── app/                   # Main Android app module
-│   │   └── src/main/java/com/rizilab/fiqhadvisor/
+│   │   └── src/main/java/com/rizilab/averroes/
 │   │       ├── MainActivity.kt
 │   │       └── ui/            # Compose UI components
 │   ├── core/                  # Core Android module (UniFFI bindings)
 │   │   ├── build.gradle.kts   # Gradle build with UniFFI integration
-│   │   └── src/main/java/com/rizilab/fiqhadvisor/core/
+│   │   └── src/main/java/com/rizilab/averroes/core/
 │   │       └── FiqhAIManager.kt  # Kotlin wrapper for Rust core
 │   └── build.gradle.kts       # Root Android build configuration
 ├── crates/                    # Rust workspace
@@ -352,8 +352,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/rizilab/fiqhadvisor/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/rizilab/fiqhadvisor/discussions)
+- **Issues**: [GitHub Issues](https://github.com/rizilab/averroes/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/rizilab/averroes/discussions)
 - **Email**: support@rizilab.com
 
 ---

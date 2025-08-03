@@ -1,17 +1,17 @@
-package com.rizilab.fiqhadvisor
+package com.rizilab.averroes
 
 import android.app.Application
 import android.util.Log
 import dagger.hilt.android.HiltAndroidApp
 
 @HiltAndroidApp
-class FiqhAdvisorApplication : Application() {
+class averroesApplication : Application() {
     
     override fun onCreate() {
         super.onCreate()
-        Log.d("FiqhAdvisorApp", "🚀 FiqhAdvisor Application Starting")
+        Log.d("averroesApp", "🚀 averroes Application Starting")
         
         // Initialize logging
-        Log.d("FiqhAdvisorApp", "📱 Application initialized for core Rust→UniFFI→Kotlin testing")
+        Log.d("averroesApp", "📱 Application initialized for core Rust→UniFFI→Kotlin testing")
     }
 }

@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.rizilab.fiqhadvisor"
+    namespace = "com.rizilab.averroes"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.rizilab.fiqhadvisor"
+        applicationId = "com.rizilab.averroes"
         minSdk = 24
         targetSdk = 34
         versionCode = 1

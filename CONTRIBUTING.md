@@ -74,11 +74,11 @@ curl -sSLO https://github.com/pinterest/ktlint/releases/latest/download/ktlint &
 
    ```bash
    # Fork the repository on GitHub first, then:
-   git clone https://github.com/YOUR_USERNAME/fiqhadvisor.git
-   cd fiqhadvisor
+   git clone https://github.com/YOUR_USERNAME/averroes.git
+   cd averroes
 
    # Add upstream remote
-   git remote add upstream https://github.com/rizilab/fiqhadvisor.git
+   git remote add upstream https://github.com/rizilab/averroes.git
    ```
 
 2. **Configure Rust**
@@ -186,11 +186,11 @@ RUST_BACKTRACE=1
 ### Codebase Overview
 
 ```
-fiqhadvisor/
+averroes/
 ├── android/                    # Android application
 │   ├── app/
 │   │   ├── src/main/
-│   │   │   ├── java/com/rizilab/fiqhadvisor/
+│   │   │   ├── java/com/rizilab/averroes/
 │   │   │   │   ├── MainActivity.kt        # Main entry point
 │   │   │   │   ├── ui/                    # Compose UI components
 │   │   │   │   │   ├── components/        # Reusable UI components
@@ -200,7 +200,7 @@ fiqhadvisor/
 │   │   │   └── res/                       # Android resources
 │   │   └── build.gradle.kts
 │   ├── core/                              # UniFFI bindings module
-│   │   ├── src/main/java/com/rizilab/fiqhadvisor/core/
+│   │   ├── src/main/java/com/rizilab/averroes/core/
 │   │   │   └── FiqhAIManager.kt          # Kotlin wrapper for Rust
 │   │   └── build.gradle.kts              # UniFFI build configuration
 │   └── build.gradle.kts                  # Root Android build
@@ -316,7 +316,7 @@ fiqhadvisor/
 3. **Update Kotlin Wrapper**
 
    ```kotlin
-   // android/core/src/main/java/com/rizilab/fiqhadvisor/core/FiqhAIManager.kt
+   // android/core/src/main/java/com/rizilab/averroes/core/FiqhAIManager.kt
    suspend fun newFunction(param: String): String {
        return fiqhSystem?.newFunction(param) ?: throw IllegalStateException("System not initialized")
    }
@@ -332,7 +332,7 @@ fiqhadvisor/
 1. **Create Composable**
 
    ```kotlin
-   // android/app/src/main/java/com/rizilab/fiqhadvisor/ui/components/NewComponent.kt
+   // android/app/src/main/java/com/rizilab/averroes/ui/components/NewComponent.kt
    @Composable
    fun NewComponent(
        modifier: Modifier = Modifier
@@ -804,9 +804,9 @@ just generate-bindings
 
 ### Getting Help
 
-1. **Check Existing Issues**: [GitHub Issues](https://github.com/rizilab/fiqhadvisor/issues)
+1. **Check Existing Issues**: [GitHub Issues](https://github.com/rizilab/averroes/issues)
 2. **Search Documentation**: README.md and inline docs
-3. **Ask Questions**: [GitHub Discussions](https://github.com/rizilab/fiqhadvisor/discussions)
+3. **Ask Questions**: [GitHub Discussions](https://github.com/rizilab/averroes/discussions)
 4. **Join Community**: Discord/Telegram links in main README
 
 ### Debug Tips
@@ -826,7 +826,7 @@ just mobile-dev
 
 ```bash
 # View logs
-adb logcat | grep FiqhAdvisor
+adb logcat | grep averroes
 
 # Debug specific component
 adb logcat | grep FiqhAIManager

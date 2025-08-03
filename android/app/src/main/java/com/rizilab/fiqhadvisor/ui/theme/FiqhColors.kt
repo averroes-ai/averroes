@@ -1,4 +1,4 @@
-package com.rizilab.fiqhadvisor.ui.theme
+package com.rizilab.averroes.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

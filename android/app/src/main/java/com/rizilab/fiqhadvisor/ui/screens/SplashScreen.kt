@@ -1,4 +1,4 @@
-package com.rizilab.fiqhadvisor.ui.screens
+package com.rizilab.averroes.ui.screens
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -87,7 +87,7 @@ fun SplashScreen(onNavigateToAuth: () -> Unit = {}, onNavigateToHome: () -> Unit
 
             // App Title
             Text(
-                    text = "FiqhAdvisor",
+                    text = "averroes",
                     fontSize = 32.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
