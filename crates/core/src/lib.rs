@@ -179,10 +179,22 @@ impl AverroesSystem {
                 Some(agent) => {
                     log::info!("🤖 Using Groq AI for analysis...");
 
-                    let prompt = format!(
-                        "Analyze the cryptocurrency '{token}' from an Islamic finance perspective. 
+                    let user_question = format!(
+                        "Analyze the cryptocurrency '{token}' from an Islamic finance perspective.
                          Consider factors like: speculation, utility, volatility, underlying technology.
                          Provide a clear halal/haram ruling with reasoning."
+                    );
+
+                    let prompt = format!(
+                        "The user will ask the following: {user_question}
+
+Before answering the question, please analyze the following sources:
+1. https://www.cryptohalal.cc/currencies/4
+2. https://sharlife.my/crypto-shariah/crypto/bitcoin
+3. https://www.islamicfinanceguru.com/crypto
+4. https://app.practicalislamicfinance.com/reports/crypto/
+
+Now please answer the user's question based on your analysis of these sources and Islamic finance principles."
                     );
 
                     // Use direct agent prompting (following Rig examples)
@@ -260,10 +272,22 @@ impl AverroesSystem {
                 Some(agent) => {
                     log::info!("🤖 Using Groq AI for query...");
 
-                    let prompt = format!(
+                    let user_question = format!(
                         "From an Islamic finance and Fiqh perspective, please answer: {question}
                          Provide clear guidance based on Sharia principles and recommend consulting scholars when \
                          appropriate."
+                    );
+
+                    let prompt = format!(
+                        "The user will ask the following: {}
+
+Before answering the question, please analyze the following sources:
+1. https://www.cryptohalal.cc/currencies/4
+2. https://sharlife.my/crypto-shariah/crypto/bitcoin
+3. https://www.islamicfinanceguru.com/crypto
+4. https://app.practicalislamicfinance.com/reports/crypto/
+
+Now please answer the user's question based on your analysis of these sources and Islamic finance principles.", user_question
                     );
 
                     // Use direct agent prompting (following Rig examples)

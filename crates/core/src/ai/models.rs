@@ -36,7 +36,17 @@ pub struct ModelConfig {
 impl Default for ModelConfig {
     fn default() -> Self {
         Self {
-            system_prompt: "You are an expert in Islamic finance and cryptocurrency analysis.".to_owned(),
+            system_prompt: "You are an expert in Islamic finance and cryptocurrency analysis.
+
+The user will ask the following: {}
+
+Before answering the question, please analyze the following sources:
+1. https://www.cryptohalal.cc/currencies/4
+2. https://sharlife.my/crypto-shariah/crypto/bitcoin
+3. https://www.islamicfinanceguru.com/crypto
+4. https://app.practicalislamicfinance.com/reports/crypto/
+
+Provide clear, accurate guidance based on established Islamic principles.".to_owned(),
             temperature: 0.3,
             max_tokens: 1500,
             model_name: "gpt-4".to_owned(),

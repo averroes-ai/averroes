@@ -21,6 +21,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
+import com.rizilab.averroes.R
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 // Mobile Wallet Adapter import (re-enabled)
@@ -102,12 +105,12 @@ fun AuthScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // App Logo
+            // App Logo - Clean transparent PNG with card background
             Card(
-                modifier = Modifier.size(100.dp),
+                modifier = Modifier.size(140.dp),
                 shape = MaterialTheme.shapes.large,
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
                 ),
                 elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
             ) {
@@ -115,10 +118,13 @@ fun AuthScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "🕌",
-                        fontSize = 40.sp,
-                        textAlign = TextAlign.Center
+                    Image(
+                        painter = painterResource(id = R.drawable.logo_averroes),
+                        contentDescription = "Averroes Logo",
+                        modifier = Modifier
+                            .size(100.dp)
+                            .padding(12.dp),
+                        contentScale = ContentScale.Fit
                     )
                 }
             }

@@ -15,6 +15,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
+import com.rizilab.averroes.R
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import com.rizilab.averroes.presentation.navigation.MainTab
@@ -40,11 +44,10 @@ fun SplashScreen(
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(
-                Icons.Default.Security,
-                contentDescription = "App Icon",
-                modifier = Modifier.size(80.dp),
-                tint = MaterialTheme.colorScheme.primary
+            Image(
+                painter = painterResource(id = R.drawable.logo_averroes),
+                contentDescription = "Averroes Logo",
+                modifier = Modifier.size(100.dp)
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(

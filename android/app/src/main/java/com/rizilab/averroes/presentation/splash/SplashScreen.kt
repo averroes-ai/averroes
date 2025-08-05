@@ -14,10 +14,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.rizilab.averroes.R
 
 @Composable
 fun SplashScreen(
@@ -73,23 +75,26 @@ fun SplashScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // App Logo/Icon
+            // App Logo/Icon - Clean transparent PNG with elegant card background
             Card(
-                modifier = Modifier.size(120.dp),
+                modifier = Modifier.size(160.dp),
                 shape = MaterialTheme.shapes.large,
                 colors = CardDefaults.cardColors(
-                    containerColor = Color.White.copy(alpha = 0.1f)
+                    containerColor = Color.White.copy(alpha = 0.15f)
                 ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
             ) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "🕌",
-                        fontSize = 48.sp,
-                        textAlign = TextAlign.Center
+                    Image(
+                        painter = painterResource(id = R.drawable.logo_averroes),
+                        contentDescription = "Averroes Logo",
+                        modifier = Modifier
+                            .size(120.dp)
+                            .padding(12.dp),
+                        contentScale = ContentScale.Fit
                     )
                 }
             }

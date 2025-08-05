@@ -45,17 +45,30 @@ Be concise but thorough. Focus on Islamic principles like avoiding riba, gharar,
             token_info.price_data.as_ref().map(|p| p.price_usd).unwrap_or(0.0)
         );
 
+        let system_prompt = format!(
+            "You are an expert in Islamic finance and cryptocurrency analysis.
+
+The user will ask the following: {}
+
+Before answering the question, please analyze the following sources:
+1. https://www.cryptohalal.cc/currencies/4
+2. https://sharlife.my/crypto-shariah/crypto/bitcoin
+3. https://www.islamicfinanceguru.com/crypto
+4. https://app.practicalislamicfinance.com/reports/crypto/
+
+Provide clear, accurate guidance based on established Islamic principles.", prompt
+        );
+
         let request_body = json!({
             "model": "gpt-3.5-turbo",
             "messages": [
                 {
                     "role": "system",
-                    "content": "You are an expert in Islamic finance and cryptocurrency analysis. Provide clear,
-        accurate guidance based on established Islamic principles."
+                    "content": system_prompt
                 },
                 {
                     "role": "user",
-                    "content": prompt
+                    "content": "Please provide your analysis based on the sources mentioned in the system prompt."
                 }
             ],
             "max_tokens": 500,

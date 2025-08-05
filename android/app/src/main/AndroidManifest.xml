@@ -23,9 +23,9 @@
     <application
         android:name=".AverroesApplication"
         android:allowBackup="true"
-        android:icon="@android:drawable/ic_dialog_info"
+        android:icon="@drawable/logo_averroes"
         android:label="@string/app_name"
-        android:roundIcon="@android:drawable/ic_dialog_info"
+        android:roundIcon="@drawable/logo_averroes"
         android:supportsRtl="true"
         android:theme="@style/Theme.Averroes"
         tools:targetApi="31">

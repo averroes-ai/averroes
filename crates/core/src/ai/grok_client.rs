@@ -24,15 +24,29 @@ impl GrokClient {
     ) -> Result<String, reqwest::Error> {
         debug!("Analyzing Islamic compliance with Grok: {}", &prompt[..50.min(prompt.len())]);
 
+        let system_prompt = format!(
+            "You are an expert in Islamic finance and Sharia compliance.
+
+The user will ask the following: {}
+
+Before answering the question, please analyze the following sources:
+1. https://www.cryptohalal.cc/currencies/4
+2. https://sharlife.my/crypto-shariah/crypto/bitcoin
+3. https://www.islamicfinanceguru.com/crypto
+4. https://app.practicalislamicfinance.com/reports/crypto/
+
+Analyze cryptocurrency and financial instruments based on Islamic principles: no riba (interest), no gharar (excessive uncertainty), no maysir (gambling), and adherence to maqashid shariah (objectives of Islamic law). Provide clear, scholarly analysis with references to Islamic sources when possible.", prompt
+        );
+
         let request_body = json!({
             "messages": [
                 {
                     "role": "system",
-                    "content": "You are an expert in Islamic finance and Sharia compliance. Analyze cryptocurrency and financial instruments based on Islamic principles: no riba (interest), no gharar (excessive uncertainty), no maysir (gambling), and adherence to maqashid shariah (objectives of Islamic law). Provide clear, scholarly analysis with references to Islamic sources when possible."
+                    "content": system_prompt
                 },
                 {
                     "role": "user",
-                    "content": prompt
+                    "content": "Please provide your analysis based on the sources mentioned in the system prompt."
                 }
             ],
             "model": "grok-beta",

@@ -249,7 +249,15 @@ impl AnalyzerActor {
                 model_name: "gpt-4".to_owned(),
                 temperature: 0.3,
                 max_tokens: 1500,
-                system_prompt: "You are an Islamic finance expert analyzing tokens according to Sharia principles."
+                system_prompt: "You are an Islamic finance expert analyzing tokens according to Sharia principles.
+
+The user will ask the following: {}
+
+Before answering the question, please analyze the following sources:
+1. https://www.cryptohalal.cc/currencies/4
+2. https://sharlife.my/crypto-shariah/crypto/bitcoin
+3. https://www.islamicfinanceguru.com/crypto
+4. https://app.practicalislamicfinance.com/reports/crypto/"
                     .to_owned(),
                 embedding_model: "text-embedding-ada-002".to_owned(),
             };
