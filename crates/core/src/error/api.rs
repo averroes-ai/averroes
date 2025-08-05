@@ -6,7 +6,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
 
-/// API-specific errors for `FiqhAI` service
+/// API-specific errors for `Averroes` service
 #[derive(Error, Debug)]
 pub enum ApiError {
     #[error("Invalid token identifier: {0}")]

@@ -9,12 +9,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing
     init();
 
-    info!("🚀 Starting FiqhAI Backend Server");
+    info!("🚀 Starting Averroes Backend Server");
 
     // Create router with basic health check
     let app = Router::new()
         .route("/health", get(health_check))
-        .route("/", get(|| async { "FiqhAI Backend Server" }));
+        .route("/", get(|| async { "Averroes Backend Server" }));
 
     // Bind to localhost:3000
     let listener = TcpListener::bind("127.0.0.1:3000").await?;

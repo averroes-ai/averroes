@@ -57,7 +57,7 @@ AISystemDiagnostics.runComprehensiveDiagnostics()
 
 **What it tests:**
 - API key configuration validation
-- FiqhAI system initialization
+- Averroes system initialization
 - AI service integration
 - Query processing readiness
 
@@ -75,7 +75,7 @@ viewModel.testAIResponse("Is Bitcoin halal?")
 | Test | Purpose | Success Indicator |
 |------|---------|------------------|
 | **API Key Configuration** | Validates Grok/Groq keys | `✓ API configuration created successfully` |
-| **System Initialization** | Tests FiqhAI system creation | `✓ FiqhAI system created successfully` |
+| **System Initialization** | Tests Averroes system creation | `✓ Averroes system created successfully` |
 | **AI Service Integration** | Verifies service connectivity | `✓ AI Service integration test completed` |
 | **Query Processing** | Tests end-to-end flow | `✓ Query processing test setup completed` |
 
@@ -139,7 +139,7 @@ Open a terminal window and start monitoring:
 
 ```bash
 # Monitor all averroes related logs
-adb logcat -v time | grep -E "(averroes|AISystemDiagnostics|FiqhAIViewModel|uniffi|fiqh)" --color=always
+adb logcat -v time | grep -E "(averroes|AISystemDiagnostics|AverroesViewModel|uniffi|fiqh)" --color=always
 ```
 
 **Alternative monitoring options:**
@@ -200,8 +200,8 @@ AISystemDiagnostics: ✓ API configuration created successfully
 AISystemDiagnostics: Preferred model: grok
 
 AISystemDiagnostics: --- Testing System Initialization ---
-AISystemDiagnostics: Creating FiqhAI system...
-AISystemDiagnostics: ✓ FiqhAI system created successfully
+AISystemDiagnostics: Creating Averroes system...
+AISystemDiagnostics: ✓ Averroes system created successfully
 AISystemDiagnostics: System object: FiqhAiSystem
 
 AISystemDiagnostics: --- Testing AI Service Integration ---
@@ -227,9 +227,9 @@ AISystemDiagnostics: ✗ Query processing test failed: [error details]
 ### AI Response Testing
 
 ```log
-FiqhAIViewModel: Testing AI response for: 'Is Bitcoin halal?'
+AverroesViewModel: Testing AI response for: 'Is Bitcoin halal?'
 AISystemDiagnostics: AI response generated successfully
-FiqhAIViewModel: AI response received: AI System Diagnostic: System initialized...
+AverroesViewModel: AI response received: AI System Diagnostic: System initialized...
 ```
 
 ## 🚨 Troubleshooting Guide
@@ -289,13 +289,13 @@ cd android
 **Debugging Steps:**
 ```bash
 # 1. Monitor ViewModel initialization logs
-adb logcat | grep "FiqhAIViewModel"
+adb logcat | grep "AverroesViewModel"
 
 # 2. Look for specific initialization messages
 adb logcat | grep -E "(🔍|✅|❌|⚠️|💥)"
 
-# 3. Check FiqhAIManager logs
-adb logcat | grep "FiqhAIManager"
+# 3. Check AverroesManager logs
+adb logcat | grep "AverroesManager"
 
 # 4. Monitor UniFFI library loading
 adb logcat | grep -E "(uniffi|native|library|JNI)"
@@ -318,7 +318,7 @@ adb logcat | grep -E "(System not initialized|initialization failed)"
 
 **Common Causes:**
 - Native library (libfiqh_core.so) not loading properly
-- FiqhAIManager.initialize() throwing exceptions
+- AverroesManager.initialize() throwing exceptions
 - createMobileConfig() parameter mismatch
 - UniFFI binding issues between Rust and Android
 
@@ -358,7 +358,7 @@ adb shell pm clear com.rizilab.averroes
 adb logcat -v threadtime > averroes_debug_$(date +%Y%m%d_%H%M%S).log
 
 # Filter by specific components
-adb logcat | grep -E "(FiqhAI|uniffi|rust)" > rust_integration.log
+adb logcat | grep -E "(Averroes|uniffi|rust)" > rust_integration.log
 
 # Monitor memory usage
 adb shell dumpsys meminfo com.rizilab.averroes
@@ -399,7 +399,7 @@ adb shell svc data enable
 
 ```bash
 # Start comprehensive monitoring
-adb logcat -v time | grep -E "(averroes|AISystemDiagnostics|FiqhAIViewModel)" --color=always
+adb logcat -v time | grep -E "(averroes|AISystemDiagnostics|AverroesViewModel)" --color=always
 
 # Monitor diagnostics only
 adb logcat | grep "AISystemDiagnostics"
@@ -469,7 +469,7 @@ For additional support, include the diagnostic log output when reporting issues.
 **Solution**: Modified the History Actor to use in-memory database for Android compatibility:
 
 1. **Updated `HistoryActor::new()`** - Now uses in-memory database when no path is provided
-2. **Updated `FiqhAISystem::new()`** - Passes `None` for database path instead of file path
+2. **Updated `AverroesSystem::new()`** - Passes `None` for database path instead of file path
 3. **Added fallback logic** - If file creation fails, automatically falls back to in-memory database
 
 **Code Changes**:

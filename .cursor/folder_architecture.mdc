@@ -31,8 +31,8 @@ fiqhai/
 │ ├── build.gradle # Includes UniFFI-generated bindings
 │ └── rust/ # Symlink or copy of core for cargo build
 ├── ios/ # iOS app
-│ ├── FiqhAI/ # Swift/SwiftUI UI
-│ ├── FiqhAI.xcodeproj # Xcode project with UniFFI bridges
+│ ├── Averroes/ # Swift/SwiftUI UI
+│ ├── Averroes.xcodeproj # Xcode project with UniFFI bridges
 │ └── rust/ # Symlink/copy of core
 ├── docker/ # AI backend service
 │ ├── Dockerfile # Builds backend crate; includes qdrant if embedded

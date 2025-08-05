@@ -2,7 +2,7 @@
 # These rules are used by all consumers of your library.
 
 # Keep native methods and UniFFI generated classes
--keep class com.rizilab.averroes.fiqhcore.** { *; }
+-keep class com.rizilab.averroes.averroescore.** { *; }
 -keep class uniffi.** { *; }
 -keepclassmembers class * {
     native <methods>;
@@ -14,9 +14,9 @@
 }
 
 # Keep UniFFI callback interfaces
--keep interface com.rizilab.averroes.fiqhcore.UniffiRustFutureContinuationCallback { *; }
--keep class com.rizilab.averroes.fiqhcore.UniffiLib { *; }
+-keep interface com.rizilab.averroes.averroescore.UniffiRustFutureContinuationCallback { *; }
+-keep class com.rizilab.averroes.averroescore.UniffiLib { *; }
 
 # Prevent obfuscation of Rust-generated classes
--keep class com.rizilab.averroes.fiqhcore.FiqhAi* { *; }
--keep class com.rizilab.averroes.fiqhcore.*Exception* { *; } 
+-keep class com.rizilab.averroes.averroescore.Averroes* { *; }
+-keep class com.rizilab.averroes.averroescore.*Exception* { *; }

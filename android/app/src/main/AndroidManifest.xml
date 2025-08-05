@@ -5,23 +5,37 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Query for Mobile Wallet Adapter compatible apps -->
+    <queries>
+        <intent>
+            <action android:name="solana.mobilewalletadapter.action.AUTHORIZE" />
+        </intent>
+        <intent>
+            <action android:name="solana.mobilewalletadapter.action.SIGN_AND_SEND_TRANSACTIONS" />
+        </intent>
+        <!-- Query for Phantom wallet specifically -->
+        <package android:name="app.phantom" />
+        <!-- Query for other popular Solana wallets -->
+        <package android:name="com.solflare.mobile" />
+        <package android:name="com.glow.android" />
+    </queries>
+
     <application
-        android:name=".averroesApplication"
+        android:name=".AverroesApplication"
         android:allowBackup="true"
         android:icon="@android:drawable/ic_dialog_info"
         android:label="@string/app_name"
         android:roundIcon="@android:drawable/ic_dialog_info"
         android:supportsRtl="true"
-        android:theme="@style/Theme.FiqhAI"
+        android:theme="@style/Theme.Averroes"
         tools:targetApi="31">
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.FiqhAI">
+            android:theme="@style/Theme.Averroes">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>

@@ -912,7 +912,7 @@ mod tests {
     #[tokio::test]
     async fn test_analyzer_actor_creation() {
         // Create a mock AI service for testing
-        let config = crate::FiqhAIConfig {
+        let config = crate::AverroesConfig {
             groq_api_key: "test_key".to_owned(),
             grok_api_key: "".to_owned(),
             openai_api_key: "".to_owned(),
@@ -928,7 +928,7 @@ mod tests {
     #[tokio::test]
     async fn test_token_extraction() {
         // Create a mock AI service for testing
-        let config = crate::FiqhAIConfig {
+        let config = crate::AverroesConfig {
             groq_api_key: "test_key".to_owned(),
             grok_api_key: "".to_owned(),
             openai_api_key: "".to_owned(),
@@ -950,7 +950,7 @@ mod tests {
     #[tokio::test]
     async fn test_keyword_extraction() {
         // Create a mock AI service for testing
-        let config = crate::FiqhAIConfig {
+        let config = crate::AverroesConfig {
             groq_api_key: "test_key".to_owned(),
             grok_api_key: "".to_owned(),
             openai_api_key: "".to_owned(),

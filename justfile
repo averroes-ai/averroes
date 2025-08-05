@@ -1,4 +1,4 @@
-# FiqhAI Development Commands
+# Averroes Development Commands
 # Run `just --list` to see all available commands
 
 # Default command - show help
@@ -11,7 +11,7 @@ default:
 
 # Run all performance benchmarks
 bench:
-    @echo "🚀 Running all FiqhAI performance benchmarks..."
+    @echo "🚀 Running all Averroes performance benchmarks..."
     cargo bench --all
 
 # Run only Islamic analysis benchmarks (targeting <500ms)
@@ -85,12 +85,12 @@ test-coverage:
 
 # Build all crates in development mode
 build:
-    @echo "🔨 Building FiqhAI (development)..."
+    @echo "🔨 Building Averroes (development)..."
     cargo build --all
 
 # Build all crates in release mode
 build-release:
-    @echo "🚀 Building FiqhAI (release)..."
+    @echo "🚀 Building Averroes (release)..."
     cargo build --all --release
 
 # Build core crate only
@@ -202,7 +202,7 @@ build-android-release:
 # Build iOS app (requires macOS)
 build-ios:
     @echo "🍎 Building iOS app with Rust core..."
-    cd ios && xcodebuild -workspace FiqhAI.xcworkspace -scheme FiqhAI -destination "generic/platform=iOS" build
+    cd ios && xcodebuild -workspace Averroes.xcworkspace -scheme Averroes -destination "generic/platform=iOS" build
 
 # Generate UniFFI bindings for Android (simpler approach - no separate crate needed)
 uniffi-android:
@@ -222,16 +222,155 @@ build-rust-ios:
     @echo "🦀 Building Rust core for iOS..."
     cd crates/core && cargo lipo --release
 
-# Run Android app
+# List connected Android devices
+list-devices:
+    @echo "📱 Connected Android devices:"
+    adb devices
+
+# Run Android app (handles multiple devices)
 run-android:
     @echo "📱 Running Android app..."
     cd android && ./gradlew installDebug
-    adb shell am start -n com.rizilab.averroes/.MainActivity
+    #!/usr/bin/env bash
+    DEVICES=$(adb devices | grep -v "List of devices" | grep "device$" | cut -f1)
+    DEVICE_COUNT=$(echo "$DEVICES" | wc -l)
+    if [ $DEVICE_COUNT -eq 1 ]; then
+    echo "📱 Installing and running on device: $DEVICES"
+    adb -s $DEVICES shell am start -n com.rizilab.averroes/.MainActivity
+    elif [ $DEVICE_COUNT -gt 1 ]; then
+    echo "⚠️ Multiple devices found. Please specify device:"
+    echo "$DEVICES"
+    echo "Use: just run-android-device <device_id>"
+    else
+    echo "❌ No devices found. Please connect a device or start an emulator."
+    fi
+
+# Run Android app on specific device
+run-android-device DEVICE:
+    @echo "📱 Running Android app on device: {{DEVICE}}..."
+    cd android && ./gradlew installDebug
+    adb -s {{DEVICE}} shell am start -n com.rizilab.averroes/.MainActivity
+
+# Install APK on all connected devices
+install-android-all:
+    @echo "📱 Installing on all connected devices..."
+    cd android && ./gradlew installDebug
+    #!/usr/bin/env bash
+    adb devices | grep "device$" | cut -f1 | while read device; do
+    echo "📱 Installing on $device"
+    adb -s $device install -r android/app/build/outputs/apk/debug/app-debug.apk
+    done
 
 # Run Android instrumentation tests
 test-android:
     @echo "🧪 Running Android instrumentation tests..."
     cd android && ./gradlew connectedDebugAndroidTest
+
+# Fix ADB connection issues
+fix-adb:
+    @echo "🔧 Fixing ADB connection issues..."
+    #!/usr/bin/env bash
+    echo "🛑 Killing ADB server..."
+    adb kill-server || true
+    sleep 2
+    echo "🔄 Starting ADB server..."
+    adb start-server
+    sleep 2
+    echo "📱 Connected devices:"
+    adb devices
+    echo "✅ ADB fix completed!"
+
+# Clean up offline/problematic devices
+clean-adb-devices:
+    @echo "🧹 Cleaning up ADB devices..."
+    #!/usr/bin/env bash
+    echo "📱 Current devices:"
+    adb devices
+    echo "🛑 Killing ADB server..."
+    adb kill-server
+    sleep 2
+    echo "🔄 Restarting ADB server..."
+    adb start-server
+    sleep 2
+    echo "📱 Cleaned devices:"
+    adb devices
+
+# Connect to BlueStacks emulator
+connect-bluestacks:
+    @echo "🔵 Connecting to BlueStacks emulator..."
+    adb connect 127.0.0.1:5555
+    @echo "📱 Connected devices:"
+    adb devices
+
+# Disconnect from BlueStacks
+disconnect-bluestacks:
+    @echo "🔵 Disconnecting from BlueStacks..."
+    adb disconnect 127.0.0.1:5555
+    @echo "📱 Remaining devices:"
+    adb devices
+
+# Uninstall app from BlueStacks (to fix signature conflicts)
+uninstall-android-bluestacks:
+    @echo "🔵 Uninstalling app from BlueStacks..."
+    adb connect 127.0.0.1:5555
+    adb -s 127.0.0.1:5555 uninstall com.rizilab.averroes || echo "App not installed or already uninstalled"
+
+# Install only on BlueStacks (excludes other devices)
+install-bluestacks-only:
+    @echo "🔵 Installing app only on BlueStacks..."
+    adb connect 127.0.0.1:5555
+    cd android && ./gradlew assembleDebug
+    adb -s 127.0.0.1:5555 install -r android/app/build/outputs/apk/debug/app-debug.apk
+
+# Run Android app on BlueStacks specifically
+run-android-bluestacks:
+    @echo "🔵 Running Android app on BlueStacks..."
+    adb connect 127.0.0.1:5555
+    @just install-bluestacks-only
+    adb -s 127.0.0.1:5555 shell am start -n com.rizilab.averroes/.MainActivity
+
+# Clean install on BlueStacks (uninstall + install)
+clean-install-bluestacks:
+    @echo "🔵 Clean installing app on BlueStacks..."
+    @just uninstall-android-bluestacks
+    adb connect 127.0.0.1:5555
+    cd android && ./gradlew installDebug -Pandroid.injected.testOnly=false
+    adb -s 127.0.0.1:5555 shell am start -n com.rizilab.averroes/.MainActivity
+
+# Force install on BlueStacks (bypasses signature checks)
+force-install-bluestacks:
+    @echo "🔵 Force installing app on BlueStacks..."
+    adb connect 127.0.0.1:5555
+    @just uninstall-android-bluestacks
+    cd android && ./gradlew assembleDebug
+    adb -s 127.0.0.1:5555 install -r android/app/build/outputs/apk/debug/app-debug.apk
+    adb -s 127.0.0.1:5555 shell am start -n com.rizilab.averroes/.MainActivity
+
+# Start Android emulator (if available)
+start-emulator:
+    @echo "🚀 Starting Android emulator..."
+    #!/usr/bin/env bash
+    EMULATOR_NAME=$(emulator -list-avds | head -1)
+    if [ -n "$EMULATOR_NAME" ]; then
+    echo "🚀 Starting emulator: $EMULATOR_NAME"
+    emulator -avd $EMULATOR_NAME -no-snapshot-load &
+    echo "⏳ Waiting for emulator to boot..."
+    adb wait-for-device
+    echo "✅ Emulator ready!"
+    else
+    echo "❌ No emulators found. Create one in Android Studio first."
+    fi
+
+# Setup BlueStacks for development
+setup-bluestacks:
+    @echo "🔵 Setting up BlueStacks for development..."
+    @echo "1. Make sure BlueStacks is running"
+    @echo "2. Enable ADB debugging in BlueStacks settings"
+    @echo "3. Connecting to BlueStacks..."
+    adb connect 127.0.0.1:5555
+    @echo "📱 Connected devices:"
+    adb devices
+    @echo "✅ BlueStacks setup completed!"
 
 # Clean mobile builds
 cleanup-mobile:
@@ -282,6 +421,39 @@ mobile-dev:
     @just check-wsl-filesystem  # Check WSL health before build
     @just build-android      # Gradle handles Rust + UniFFI + Android
     @echo "✅ Mobile development cycle completed!"
+
+# Quick Android development cycle (build + install + run)
+android-dev:
+    @echo "📱 Quick Android development cycle..."
+    @just fix-adb           # Fix any ADB issues first
+    @just build-android     # Build the app
+    @just run-android       # Install and run
+    @echo "✅ Android development cycle completed!"
+
+# Quick Android development cycle with BlueStacks
+android-dev-bluestacks:
+    @echo "🔵 Quick Android development cycle (BlueStacks)..."
+    @just connect-bluestacks  # Connect to BlueStacks
+    @just build-android       # Build the app
+    @just run-android-bluestacks  # Install and run on BlueStacks
+    @echo "✅ Android BlueStacks development cycle completed!"
+
+# Clean Android development cycle with BlueStacks (fixes signature issues)
+android-dev-bluestacks-clean:
+    @echo "🔵 Clean Android development cycle (BlueStacks)..."
+    @just connect-bluestacks  # Connect to BlueStacks
+    @just build-android       # Build the app
+    @just clean-install-bluestacks  # Clean install and run on BlueStacks
+    @echo "✅ Clean Android BlueStacks development cycle completed!"
+
+# Android development with device check
+android-dev-safe:
+    @echo "📱 Safe Android development cycle..."
+    @just list-devices      # Show available devices
+    @just fix-adb          # Fix any ADB issues
+    @just build-android    # Build the app
+    @just install-android-all  # Install on all devices
+    @echo "✅ Safe Android development cycle completed!"
 
 # Mobile release workflow (clean build for reliability - Ferrostar approach)
 mobile-release:
@@ -488,7 +660,7 @@ reset:
 
 # Show project status
 status:
-    @echo "📊 FiqhAI Project Status"
+    @echo "📊 Averroes Project Status"
     @echo "======================="
     @echo "📦 Workspace packages:"
     cargo metadata --no-deps --format-version 1 | jq -r '.workspace_members[] | split(" ") | .[0]'

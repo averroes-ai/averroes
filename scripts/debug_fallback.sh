@@ -39,7 +39,7 @@ monitor_initialization() {
     echo "----------------------------------------"
     
     # Monitor with emojis and specific patterns
-    adb logcat -v time | grep -E "(FiqhAIViewModel|FiqhAIManager|🔍|✅|❌|⚠️|💥|System not initialized|initialization failed|Native library)" --color=always
+    adb logcat -v time | grep -E "(AverroesViewModel|AverroesManager|🔍|✅|❌|⚠️|💥|System not initialized|initialization failed|Native library)" --color=always
 }
 
 # Function to check native library loading
@@ -59,17 +59,17 @@ monitor_viewmodel_flow() {
     echo "Press Ctrl+C to stop"
     echo "----------------------------------------"
     
-    adb logcat -v time | grep "FiqhAIViewModel" --color=always
+    adb logcat -v time | grep "AverroesViewModel" --color=always
 }
 
-# Function to check FiqhAIManager status
+# Function to check AverroesManager status
 check_manager_status() {
-    echo "⚙️ Checking FiqhAIManager initialization status..."
+    echo "⚙️ Checking AverroesManager initialization status..."
     echo "Launch the app and watch for manager messages..."
     echo "Press Ctrl+C to stop"
     echo "----------------------------------------"
     
-    adb logcat -v time | grep "FiqhAIManager" --color=always
+    adb logcat -v time | grep "AverroesManager" --color=always
 }
 
 # Function to run comprehensive diagnostic test
@@ -94,7 +94,7 @@ run_diagnostic_test() {
         echo "Please perform a query in the app (e.g., type 'Bitcoin')"
         
         # Monitor for 30 seconds
-        timeout 30s adb logcat -v time | grep -E "(FiqhAIViewModel|FiqhAIManager|🔍|✅|❌|⚠️|💥)" --color=always
+        timeout 30s adb logcat -v time | grep -E "(AverroesViewModel|AverroesManager|🔍|✅|❌|⚠️|💥)" --color=always
         
         echo "✅ Diagnostic test completed"
     else
@@ -110,7 +110,7 @@ save_diagnostic_logs() {
     echo "Launch the app and perform a query, then press Ctrl+C"
     
     # Save logs for analysis
-    adb logcat -v threadtime | grep -E "(FiqhAIViewModel|FiqhAIManager|uniffi|library|initialization|fallback)" > "$filename" &
+    adb logcat -v threadtime | grep -E "(AverroesViewModel|AverroesManager|uniffi|library|initialization|fallback)" > "$filename" &
     local log_pid=$!
     
     echo "📝 Logging to $filename (PID: $log_pid)"
@@ -134,11 +134,11 @@ analyze_common_issues() {
     echo "3. Checking for UniFFI errors..."
     adb logcat -d | grep -E "(uniffi.*error|uniffi.*exception)" | tail -5
     
-    echo "4. Checking for recent FiqhAIManager messages..."
-    adb logcat -d | grep "FiqhAIManager" | tail -10
+    echo "4. Checking for recent AverroesManager messages..."
+    adb logcat -d | grep "AverroesManager" | tail -10
     
     echo "5. Checking for recent ViewModel messages..."
-    adb logcat -d | grep "FiqhAIViewModel" | tail -10
+    adb logcat -d | grep "AverroesViewModel" | tail -10
 }
 
 # Main menu
@@ -148,7 +148,7 @@ show_menu() {
     echo "1. Monitor initialization flow (recommended)"
     echo "2. Check native library loading"
     echo "3. Monitor ViewModel flow only"
-    echo "4. Check FiqhAIManager status"
+    echo "4. Check AverroesManager status"
     echo "5. Run comprehensive diagnostic test"
     echo "6. Save diagnostic logs to file"
     echo "7. Analyze recent logs for common issues"

@@ -3,7 +3,7 @@ use tracing::debug;
 use tracing::error;
 use tracing::info;
 
-use crate::FiqhAIConfig;
+use crate::AverroesConfig;
 use crate::ai::grok_client::GrokClient;
 use crate::ai::groq_client::GroqClient;
 use crate::ai::models::LanguageModel;
@@ -23,7 +23,7 @@ pub struct AIService {
 }
 
 impl AIService {
-    pub async fn new(config: &FiqhAIConfig) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn new(config: &AverroesConfig) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         info!("Initializing AI service with preferred model: {}", config.preferred_model);
 
         let groq_client = if !config.groq_api_key.is_empty() {

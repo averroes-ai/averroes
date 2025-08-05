@@ -461,7 +461,7 @@ async fn setup_test_system() -> (
     let analyzer_handle = spawn_analyzer_actor(
         Some("http://localhost:8899".to_owned()),
         None, // Use default config for tests
-        std::sync::Arc::new(crate::ai::AIService::new(&crate::FiqhAIConfig::default()).await.unwrap()),
+        std::sync::Arc::new(crate::ai::AIService::new(&crate::AverroesConfig::default()).await.unwrap()),
     )
     .await;
 

@@ -4,7 +4,6 @@ uniffi::setup_scaffolding!();
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use log;
 use rig::client::CompletionClient;
 use rig::completion::Prompt;
 use rig::providers::groq;
@@ -15,7 +14,7 @@ use tokio::runtime::Runtime;
 // ============================================================================
 
 #[derive(uniffi::Record, Clone, Debug)]
-pub struct FiqhAIConfig {
+pub struct AverroesConfig {
     pub groq_api_key: String,
     pub model_name: String,
     pub preferred_model: String, // "groq" or "mock"
@@ -40,7 +39,7 @@ pub struct StreamChunk {
 }
 
 #[derive(uniffi::Error, thiserror::Error, Debug)]
-pub enum FiqhAIError {
+pub enum AverroesError {
     #[error("Initialization error: {0}")]
     InitializationError(String),
 
@@ -68,7 +67,7 @@ pub trait StreamCallback: Send + Sync {
     );
 }
 
-impl Default for FiqhAIConfig {
+impl Default for AverroesConfig {
     fn default() -> Self {
         Self {
             groq_api_key: std::env::var("GROQ_API_KEY").unwrap_or_default(),
@@ -83,7 +82,7 @@ impl Default for FiqhAIConfig {
 // ============================================================================
 
 #[derive(uniffi::Object)]
-pub struct FiqhAISystem {
+pub struct AverroesSystem {
     // Use Mutex for interior mutability (UniFFI exports Arc<Self>)
     agent_type: Mutex<AgentType>,
     // Shared Tokio runtime for all async operations (UniFFI best practice)
@@ -98,21 +97,21 @@ enum AgentType {
 }
 
 #[uniffi::export]
-impl FiqhAISystem {
+impl AverroesSystem {
     /// Simple synchronous constructor (following sprucekit-mobile pattern)
     #[uniffi::constructor]
-    pub fn new_fiqh_ai() -> Result<Self, FiqhAIError> {
-        log::warn!("🔥 RUST DEBUG: new_fiqh_ai() called!");
-        log::warn!("🔥 RUST DEBUG: Creating FiqhAI system (sync constructor)");
+    pub fn new_averroes_system() -> Result<Self, AverroesError> {
+        log::warn!("🔥 RUST DEBUG: new_averroes_system() called!");
+        log::warn!("🔥 RUST DEBUG: Creating Averroes system (sync constructor)");
 
         // Create Tokio runtime for async operations (UniFFI best practice)
         let runtime = Runtime::new()
-            .map_err(|e| FiqhAIError::InitializationError(format!("Failed to create Tokio runtime: {}", e)))?;
+            .map_err(|e| AverroesError::InitializationError(format!("Failed to create Tokio runtime: {e}")))?;
 
         // Start with mock, upgrade to Groq via async method
         let agent_type = Mutex::new(AgentType::Mock);
 
-        log::warn!("🔥 RUST DEBUG: FiqhAI system created with Mock agent (ready for upgrade)");
+        log::warn!("🔥 RUST DEBUG: Averroes system created with Mock agent (ready for upgrade)");
 
         Ok(Self {
             agent_type,
@@ -121,7 +120,7 @@ impl FiqhAISystem {
     }
 
     /// Async method to upgrade to Groq (following sprucekit-mobile pattern)
-    pub async fn initialize_groq_agent(&self) -> Result<(), FiqhAIError> {
+    pub async fn initialize_groq_agent(&self) -> Result<(), AverroesError> {
         log::warn!("🔥 RUST DEBUG: initialize_groq_agent() called!");
 
         // Use the shared runtime to spawn async task (UniFFI best practice)
@@ -135,7 +134,7 @@ impl FiqhAISystem {
                 },
                 Err(e) => {
                     log::warn!("⚠️ Failed to create Groq agent: {e}, keeping mock");
-                    Err(FiqhAIError::InitializationError(e.to_string()))
+                    Err(AverroesError::InitializationError(e.to_string()))
                 },
             }
         });
@@ -150,8 +149,8 @@ impl FiqhAISystem {
             },
             Ok(Err(e)) => Err(e),
             Err(join_error) => {
-                log::error!("❌ Task join error: {}", join_error);
-                Err(FiqhAIError::InitializationError(format!("Task execution failed: {}", join_error)))
+                log::error!("❌ Task join error: {join_error}");
+                Err(AverroesError::InitializationError(format!("Task execution failed: {join_error}")))
             },
         }
     }
@@ -160,8 +159,8 @@ impl FiqhAISystem {
     pub async fn analyze_token(
         &self,
         token: String,
-    ) -> Result<QueryResponse, FiqhAIError> {
-        log::warn!("🔥 RUST DEBUG: analyze_token({}) called!", token);
+    ) -> Result<QueryResponse, AverroesError> {
+        log::warn!("🔥 RUST DEBUG: analyze_token({token}) called!");
 
         // Extract agent Arc or identify as Mock, outside the spawn
         let (groq_agent, is_groq) = {
@@ -191,7 +190,7 @@ impl FiqhAISystem {
                         Ok(response) => response,
                         Err(e) => {
                             log::error!("❌ Groq API error: {e}");
-                            return Err(FiqhAIError::AIError(e.to_string()));
+                            return Err(AverroesError::AIError(e.to_string()));
                         },
                     }
                 },
@@ -231,8 +230,8 @@ impl FiqhAISystem {
         match handle.await {
             Ok(result) => result,
             Err(join_error) => {
-                log::error!("❌ Task join error: {}", join_error);
-                Err(FiqhAIError::InitializationError(format!("Task execution failed: {}", join_error)))
+                log::error!("❌ Task join error: {join_error}");
+                Err(AverroesError::InitializationError(format!("Task execution failed: {join_error}")))
             },
         }
     }
@@ -241,7 +240,7 @@ impl FiqhAISystem {
     pub async fn query(
         &self,
         question: String,
-    ) -> Result<QueryResponse, FiqhAIError> {
+    ) -> Result<QueryResponse, AverroesError> {
         log::warn!("🔥 RUST DEBUG: query({}) called!", question.chars().take(30).collect::<String>());
 
         // Extract agent Arc or identify as Mock, outside the spawn
@@ -262,10 +261,9 @@ impl FiqhAISystem {
                     log::info!("🤖 Using Groq AI for query...");
 
                     let prompt = format!(
-                        "From an Islamic finance and Fiqh perspective, please answer: {}
+                        "From an Islamic finance and Fiqh perspective, please answer: {question}
                          Provide clear guidance based on Sharia principles and recommend consulting scholars when \
-                         appropriate.",
-                        question
+                         appropriate."
                     );
 
                     // Use direct agent prompting (following Rig examples)
@@ -273,7 +271,7 @@ impl FiqhAISystem {
                         Ok(response) => response,
                         Err(e) => {
                             log::error!("❌ Groq API error: {e}");
-                            return Err(FiqhAIError::AIError(e.to_string()));
+                            return Err(AverroesError::AIError(e.to_string()));
                         },
                     }
                 },
@@ -310,8 +308,8 @@ impl FiqhAISystem {
         match handle.await {
             Ok(result) => result,
             Err(join_error) => {
-                log::error!("❌ Task join error: {}", join_error);
-                Err(FiqhAIError::InitializationError(format!("Task execution failed: {}", join_error)))
+                log::error!("❌ Task join error: {join_error}");
+                Err(AverroesError::InitializationError(format!("Task execution failed: {join_error}")))
             },
         }
     }
@@ -321,7 +319,7 @@ impl FiqhAISystem {
         &self,
         token: String,
         callback: Box<dyn StreamCallback>,
-    ) -> Result<(), FiqhAIError> {
+    ) -> Result<(), AverroesError> {
         log::warn!("🔥 RUST DEBUG: analyze_token_stream({token}) called!");
 
         let query_id = format!("token_{token}_{}", chrono::Utc::now().timestamp());
@@ -371,7 +369,7 @@ impl FiqhAISystem {
                                     // Send chunk to callback
                                     callback.on_chunk(StreamChunk {
                                         query_id: query_id.clone(),
-                                        content: format!("{} ", word),
+                                        content: format!("{word} "),
                                         is_final: false,
                                         chunk_index: i as u32,
                                     });
@@ -398,7 +396,7 @@ impl FiqhAISystem {
                             Err(e) => {
                                 log::error!("❌ Groq API error: {e}");
                                 callback.on_error(format!("Groq API error: {e}"));
-                                Err(FiqhAIError::AIError(e.to_string()))
+                                Err(AverroesError::AIError(e.to_string()))
                             },
                         }
                     },
@@ -426,7 +424,7 @@ impl FiqhAISystem {
 
                             callback.on_chunk(StreamChunk {
                                 query_id: query_id.clone(),
-                                content: format!("{} ", word),
+                                content: format!("{word} "),
                                 is_final: false,
                                 chunk_index: i as u32,
                             });
@@ -460,7 +458,7 @@ impl FiqhAISystem {
             .await
             .map_err(|join_error| {
                 log::error!("❌ Task join error: {join_error}");
-                FiqhAIError::InitializationError(format!("Task execution failed: {join_error}"))
+                AverroesError::InitializationError(format!("Task execution failed: {join_error}"))
             })?;
 
         Ok(())
@@ -471,7 +469,7 @@ impl FiqhAISystem {
         &self,
         question: String,
         callback: Box<dyn StreamCallback>,
-    ) -> Result<(), FiqhAIError> {
+    ) -> Result<(), AverroesError> {
         log::warn!("🔥 RUST DEBUG: query_stream({}) called!", question.chars().take(30).collect::<String>());
 
         let query_id = format!("query_{}", chrono::Utc::now().timestamp());
@@ -521,7 +519,7 @@ impl FiqhAISystem {
                                     // Send chunk to callback
                                     callback.on_chunk(StreamChunk {
                                         query_id: query_id.clone(),
-                                        content: format!("{} ", word),
+                                        content: format!("{word} "),
                                         is_final: false,
                                         chunk_index: i as u32,
                                     });
@@ -548,7 +546,7 @@ impl FiqhAISystem {
                             Err(e) => {
                                 log::error!("❌ Groq API error: {e}");
                                 callback.on_error(format!("Groq API error: {e}"));
-                                Err(FiqhAIError::AIError(e.to_string()))
+                                Err(AverroesError::AIError(e.to_string()))
                             },
                         }
                     },
@@ -573,7 +571,7 @@ impl FiqhAISystem {
 
                             callback.on_chunk(StreamChunk {
                                 query_id: query_id.clone(),
-                                content: format!("{} ", word),
+                                content: format!("{word} "),
                                 is_final: false,
                                 chunk_index: i as u32,
                             });
@@ -607,7 +605,7 @@ impl FiqhAISystem {
             .await
             .map_err(|join_error| {
                 log::error!("❌ Task join error: {join_error}");
-                FiqhAIError::InitializationError(format!("Task execution failed: {join_error}"))
+                AverroesError::InitializationError(format!("Task execution failed: {join_error}"))
             })?;
 
         Ok(())
@@ -641,7 +639,7 @@ impl FiqhAISystem {
 // HELPER FUNCTIONS
 // ============================================================================
 
-impl FiqhAISystem {
+impl AverroesSystem {
     /// Create Groq agent following Rig example pattern
     async fn create_groq_agent()
     -> Result<rig::agent::Agent<groq::CompletionModel>, Box<dyn std::error::Error + Send + Sync>> {
@@ -665,7 +663,7 @@ impl FiqhAISystem {
 /// Format AI response with proper paragraphs and structure for better readability
 fn format_ai_response(raw_response: &str) -> String {
     // Remove thinking tags and clean up
-    let cleaned = raw_response.replace("<think>", "").replace("</think>", "").trim().to_string();
+    let cleaned = raw_response.replace("<think>", "").replace("</think>", "").trim().to_owned();
 
     // Add paragraph breaks for better readability
     let formatted = cleaned
@@ -718,9 +716,9 @@ impl AudioProcessor {
         &self,
         audio_data: Vec<u8>,
         _language: Option<String>,
-    ) -> Result<String, FiqhAIError> {
+    ) -> Result<String, AverroesError> {
         if audio_data.is_empty() {
-            return Err(FiqhAIError::InvalidQuery("Audio data cannot be empty".to_owned()));
+            return Err(AverroesError::InvalidQuery("Audio data cannot be empty".to_owned()));
         }
 
         // Mock STT based on audio data size
@@ -748,7 +746,7 @@ impl SolanaConnector {
         }
     }
 
-    pub async fn is_connected(&self) -> Result<bool, FiqhAIError> {
+    pub async fn is_connected(&self) -> Result<bool, AverroesError> {
         Ok(true) // Mock connection
     }
 
@@ -788,7 +786,7 @@ impl ChatbotSession {
         &self,
         message: String,
         _context: Option<String>,
-    ) -> Result<QueryResponse, FiqhAIError> {
+    ) -> Result<QueryResponse, AverroesError> {
         let response_text =
             format!("Thank you for your question: '{message}'. I will analyze this based on Islamic principles.");
 

@@ -54,7 +54,7 @@ dependencies {
 
 cargoNdk {
     module = "../crates/core"
-    librariesNames = arrayListOf("libfiqh_core.so")
+    librariesNames = arrayListOf("libaverroes_core.so")
     targets = arrayListOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
     targetDirectory = "../../target"
     extraCargoBuildArguments = arrayListOf("--features", "ai,mobile")
@@ -68,7 +68,7 @@ afterEvaluate {
             workingDir = file("../../crates/core")
             commandLine(
                 "cargo", "run", "--bin", "uniffi-bindgen", "generate",
-                "--library", "../../target/aarch64-linux-android/${if (variant.name.contains("release")) "release" else "debug"}/libfiqh_core.so",
+                "--library", "../../target/aarch64-linux-android/${if (variant.name.contains("release")) "release" else "debug"}/libaverroes_core.so",
                 "--language", "kotlin",
                 "--out-dir", bDir.asFile.absolutePath
             )

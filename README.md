@@ -214,7 +214,7 @@ averroes/
 │   ├── core/                  # Core Android module (UniFFI bindings)
 │   │   ├── build.gradle.kts   # Gradle build with UniFFI integration
 │   │   └── src/main/java/com/rizilab/averroes/core/
-│   │       └── FiqhAIManager.kt  # Kotlin wrapper for Rust core
+│   │       └── AverroesManager.kt  # Kotlin wrapper for Rust core
 │   └── build.gradle.kts       # Root Android build configuration
 ├── crates/                    # Rust workspace
 │   ├── core/                  # Main Rust library
@@ -260,7 +260,7 @@ averroes/
    # 1. Add function to crates/core/src/lib.rs with #[uniffi::export]
    # 2. Regenerate bindings
    just generate-bindings
-   # 3. Update Kotlin wrapper in android/core/src/.../FiqhAIManager.kt
+   # 3. Update Kotlin wrapper in android/core/src/.../AverroesManager.kt
    # 4. Test the integration
    just mobile-dev
    ```
@@ -285,13 +285,13 @@ averroes/
 
 ```rust
 // Initialize the system
-let config = FiqhAIConfig {
+let config = AverroesConfig {
     database_path: "path/to/db".to_string(),
     solana_rpc_url: "https://api.mainnet-beta.solana.com".to_string(),
     ai_model_config: Default::default(),
 };
 
-let system = FiqhAISystem::new(config).await?;
+let system = AverroesSystem::new(config).await?;
 
 // Analyze a token
 let query = Query::TokenAnalysis {
@@ -305,9 +305,9 @@ let response = system.process_query(query).await?;
 ### Android Kotlin API
 
 ```kotlin
-// Initialize through FiqhAIManager
+// Initialize through AverroesManager
 class MainActivity : ComponentActivity() {
-    private val fiqhManager = FiqhAIManager()
+    private val fiqhManager = AverroesManager()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

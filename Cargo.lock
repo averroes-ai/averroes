@@ -382,6 +382,67 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
+name = "averroes_core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-stream",
+ "async-trait",
+ "axum 0.8.4",
+ "borsh 1.5.7",
+ "candle-core",
+ "candle-nn",
+ "chrono",
+ "cpal",
+ "criterion",
+ "crossbeam",
+ "dashmap 6.1.0",
+ "dotenvy",
+ "faiss",
+ "futures",
+ "futures-util",
+ "hyper",
+ "lazy_static",
+ "log",
+ "mockall",
+ "native-tls",
+ "openai-api-rs",
+ "openssl",
+ "qdrant-client",
+ "rand 0.9.2",
+ "redb",
+ "regex",
+ "reqwest",
+ "rig-core",
+ "rodio",
+ "scraper",
+ "select",
+ "serde",
+ "serde_json",
+ "sled",
+ "solana-account-decoder",
+ "solana-client",
+ "solana-program",
+ "solana-pubkey",
+ "solana-transaction",
+ "spl-token",
+ "tempfile",
+ "thiserror 2.0.12",
+ "tiktoken-rs",
+ "tokio",
+ "tokio-test",
+ "tower 0.5.2",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "uniffi",
+ "url",
+ "urlencoding",
+ "uuid",
+ "wiremock",
+]
+
+[[package]]
 name = "axum"
 version = "0.7.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -486,9 +547,9 @@ dependencies = [
 name = "backend"
 version = "0.0.0"
 dependencies = [
+ "averroes_core",
  "axum 0.8.4",
  "crossbeam",
- "fiqh_core",
  "serde",
  "tokio",
  "tracing",
@@ -1513,7 +1574,7 @@ dependencies = [
 name = "desktop"
 version = "0.0.0"
 dependencies = [
- "fiqh_core",
+ "averroes_core",
 ]
 
 [[package]]
@@ -1807,67 +1868,6 @@ name = "fiat-crypto"
 version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
-
-[[package]]
-name = "fiqh_core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-stream",
- "async-trait",
- "axum 0.8.4",
- "borsh 1.5.7",
- "candle-core",
- "candle-nn",
- "chrono",
- "cpal",
- "criterion",
- "crossbeam",
- "dashmap 6.1.0",
- "dotenvy",
- "faiss",
- "futures",
- "futures-util",
- "hyper",
- "lazy_static",
- "log",
- "mockall",
- "native-tls",
- "openai-api-rs",
- "openssl",
- "qdrant-client",
- "rand 0.9.2",
- "redb",
- "regex",
- "reqwest",
- "rig-core",
- "rodio",
- "scraper",
- "select",
- "serde",
- "serde_json",
- "sled",
- "solana-account-decoder",
- "solana-client",
- "solana-program",
- "solana-pubkey",
- "solana-transaction",
- "spl-token",
- "tempfile",
- "thiserror 2.0.12",
- "tiktoken-rs",
- "tokio",
- "tokio-test",
- "tower 0.5.2",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "uniffi",
- "url",
- "urlencoding",
- "uuid",
- "wiremock",
-]
 
 [[package]]
 name = "five8"
@@ -8537,9 +8537,9 @@ dependencies = [
 name = "web"
 version = "0.0.0"
 dependencies = [
+ "averroes_core",
  "axum 0.8.4",
  "crossbeam",
- "fiqh_core",
  "serde",
  "tokio",
  "tracing",

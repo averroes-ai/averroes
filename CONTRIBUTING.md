@@ -201,7 +201,7 @@ averroes/
 │   │   └── build.gradle.kts
 │   ├── core/                              # UniFFI bindings module
 │   │   ├── src/main/java/com/rizilab/averroes/core/
-│   │   │   └── FiqhAIManager.kt          # Kotlin wrapper for Rust
+│   │   │   └── AverroesManager.kt          # Kotlin wrapper for Rust
 │   │   └── build.gradle.kts              # UniFFI build configuration
 │   └── build.gradle.kts                  # Root Android build
 ├── crates/                               # Rust workspace
@@ -299,8 +299,8 @@ averroes/
    ```rust
    // crates/core/src/lib.rs
    #[uniffi::export]
-   impl FiqhAISystem {
-       pub async fn new_function(&self, param: String) -> Result<String, FiqhAIError> {
+   impl AverroesSystem {
+       pub async fn new_function(&self, param: String) -> Result<String, AverroesError> {
            // Implementation
            Ok("result".to_string())
        }
@@ -316,7 +316,7 @@ averroes/
 3. **Update Kotlin Wrapper**
 
    ```kotlin
-   // android/core/src/main/java/com/rizilab/averroes/core/FiqhAIManager.kt
+   // android/core/src/main/java/com/rizilab/averroes/core/AverroesManager.kt
    suspend fun newFunction(param: String): String {
        return fiqhSystem?.newFunction(param) ?: throw IllegalStateException("System not initialized")
    }
@@ -412,7 +412,7 @@ The actor system is central to our architecture. Here's how to work with it:
 /// * `analysis_type` - Type of analysis to perform
 ///
 /// # Returns
-/// * `Result<AnalysisResult, FiqhAIError>` - Analysis result or error
+/// * `Result<AnalysisResult, AverroesError>` - Analysis result or error
 ///
 /// # Example
 /// ```rust
@@ -422,12 +422,12 @@ The actor system is central to our architecture. Here's how to work with it:
 /// ).await?;
 /// ```
 #[uniffi::export]
-impl FiqhAISystem {
+impl AverroesSystem {
     pub async fn analyze_token(
         &self,
         contract_address: String,
         analysis_type: AnalysisType,
-    ) -> Result<AnalysisResult, FiqhAIError> {
+    ) -> Result<AnalysisResult, AverroesError> {
         // Implementation...
         todo!()
     }
@@ -439,7 +439,7 @@ impl FiqhAISystem {
 ```rust
 // Use custom error types
 #[derive(uniffi::Error, thiserror::Error, Debug)]
-pub enum FiqhAIError {
+pub enum AverroesError {
     #[error("Network error: {message}")]
     NetworkError { message: String },
 
@@ -448,9 +448,9 @@ pub enum FiqhAIError {
 }
 
 // Proper error propagation
-pub async fn risky_operation() -> Result<String, FiqhAIError> {
+pub async fn risky_operation() -> Result<String, AverroesError> {
     let data = fetch_data().await
-        .map_err(|e| FiqhAIError::NetworkError {
+        .map_err(|e| AverroesError::NetworkError {
             message: e.to_string()
         })?;
 
@@ -477,14 +477,14 @@ insert_final_newline = true
 
 ```kotlin
 /**
- * Manages the FiqhAI system integration for Android
+ * Manages the Averroes system integration for Android
  */
-class FiqhAIManager {
+class AverroesManager {
     private var fiqhSystem: FiqhAiSystem? = null
     private val coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     /**
-     * Initializes the FiqhAI system
+     * Initializes the Averroes system
      * @param context Android context for initialization
      */
     suspend fun initialize(context: Context) {
@@ -496,7 +496,7 @@ class FiqhAIManager {
 
             fiqhSystem = FiqhAiSystem(config)
         } catch (e: Exception) {
-            Log.e("FiqhAIManager", "Initialization failed", e)
+            Log.e("AverroesManager", "Initialization failed", e)
             throw e
         }
     }
@@ -589,8 +589,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_token_analysis() {
-        let config = FiqhAIConfig::default();
-        let system = FiqhAISystem::new(config).await.unwrap();
+        let config = AverroesConfig::default();
+        let system = AverroesSystem::new(config).await.unwrap();
 
         let result = system.analyze_token(
             "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v".to_string(),
@@ -620,11 +620,11 @@ async fn test_full_analysis_workflow() {
 
 ```kotlin
 @RunWith(JUnit4::class)
-class FiqhAIManagerTest {
+class AverroesManagerTest {
     @Test
     fun testInitialization() = runTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        val manager = FiqhAIManager()
+        val manager = AverroesManager()
 
         manager.initialize(context)
         assertTrue(manager.isInitialized())
@@ -829,7 +829,7 @@ just mobile-dev
 adb logcat | grep averroes
 
 # Debug specific component
-adb logcat | grep FiqhAIManager
+adb logcat | grep AverroesManager
 ```
 
 ---

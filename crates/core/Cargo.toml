@@ -1,5 +1,5 @@
 [package]
-name = "fiqh_core"
+name = "averroes_core"
 version = "0.1.0"
 repository.workspace = true
 license.workspace = true
@@ -9,7 +9,7 @@ workspace = "../.."
 # Add library types for mobile bindings
 [lib]
 crate-type = ["lib", "staticlib", "cdylib"]
-name = "fiqh_core"
+name = "averroes_core"
 
 # UniFFI bindgen binary (required for code generation)
 [[bin]]

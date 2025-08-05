@@ -23,7 +23,7 @@ mod integration_tests {
 
     async fn spawn_analyzer_actor_with_test_config() -> AnalyzerActorHandle {
         // Create a mock AI service for testing
-        let config = crate::FiqhAIConfig {
+        let config = crate::AverroesConfig {
             groq_api_key: "test_key".to_owned(),
             grok_api_key: "".to_owned(),
             openai_api_key: "".to_owned(),
