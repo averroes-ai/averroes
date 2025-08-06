@@ -21,6 +21,21 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        // Ensure all architectures are included
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+        }
+    }
+
+    signingConfigs {
+        create("release") {
+            // Use debug keystore for easier installation
+            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
@@ -36,6 +51,7 @@ android {
             )
             buildConfigField("String", "SOLANA_NETWORK", "\"mainnet\"")
             buildConfigField("String", "RPC_URL", "\"https://api.mainnet-beta.solana.com\"")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     

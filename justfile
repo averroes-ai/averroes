@@ -189,15 +189,13 @@ generate-uniffi-android-release:
     cd crates/core && cargo run --bin uniffi-bindgen generate --library ../../target/aarch64-linux-android/release/libfiqh_core.so --language kotlin --out-dir ../../android/core/src/main/java/uniffi/fiqh_core/
     @echo "✅ UniFFI Kotlin bindings generated (release)!"
 
-# Build Android release (Gradle handles everything - clean build)
+# Build Android release APK
 build-android-release:
-    @echo "🚀 Building Android release (Gradle-integrated)..."
-    #!/usr/bin/env sh
-    if [ "{{os()}}" = "windows" ]; then \
-        cd android && ./gradlew.bat clean assembleRelease; \
-    else \
-        cd android && ./gradlew clean assembleRelease; \
-    fi
+    @echo "🚀 Building Averroes Android Release APK..."
+    cd android && ./gradlew :app:assembleRelease
+    @echo "✅ Release APK built successfully!"
+    @echo "📁 Location: android/app/build/outputs/apk/release/"
+    ls -la android/app/build/outputs/apk/release/
 
 # Build iOS app (requires macOS)
 build-ios:

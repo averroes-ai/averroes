@@ -37,7 +37,7 @@ sealed class ChatIntent {
     object InitializeFiqhCore : ChatIntent()
     data class UpdateInput(val text: String) : ChatIntent()
     data class SendMessage(val message: String = "") : ChatIntent()
-    data class AnalyzeToken(val token: String) : ChatIntent()
+    data class AnalyzeToken(val userInput: String) : ChatIntent() // Now accepts any text input
     object ClearChat : ChatIntent()
     object ClearError : ChatIntent()
 }
@@ -68,7 +68,7 @@ class ChatViewModel : MviViewModel<ChatState, ChatIntent, ChatEffect>(ChatState(
             is ChatIntent.InitializeFiqhCore -> initializeFiqhCore()
             is ChatIntent.UpdateInput -> updateInput(intent.text)
             is ChatIntent.SendMessage -> sendMessage(intent.message)
-            is ChatIntent.AnalyzeToken -> analyzeToken(intent.token)
+            is ChatIntent.AnalyzeToken -> analyzeToken(intent.userInput)
             is ChatIntent.ClearChat -> clearChat()
             is ChatIntent.ClearError -> clearError()
         }
@@ -201,15 +201,15 @@ class ChatViewModel : MviViewModel<ChatState, ChatIntent, ChatEffect>(ChatState(
         }
     }
 
-    private fun analyzeToken(token: String) {
+    private fun analyzeToken(userInput: String) {
         viewModelScope.launch {
             val userMessage = ChatMessage(
                 id = generateMessageId(),
-                content = "Please analyze the token: $token",
+                content = userInput,
                 isUser = true
             )
 
-            updateState { 
+            updateState {
                 copy(
                     messages = messages + userMessage,
                     isStreaming = true
@@ -219,11 +219,11 @@ class ChatViewModel : MviViewModel<ChatState, ChatIntent, ChatEffect>(ChatState(
             sendEffect(ChatEffect.ScrollToBottom)
 
             try {
-                // Use real fiqh_core AI system for token analysis
+                // Use real fiqh_core AI system for any user input analysis
                 fiqhAiManager?.let { aiManager ->
                     val aiMessageId = generateMessageId()
                     aiManager.analyzeTokenStream(
-                        token = token,
+                        token = userInput, // Now accepts any text input
                         onChunk = { accumulatedContent ->
                             val aiMessage = ChatMessage(
                                 id = aiMessageId,
@@ -250,22 +250,22 @@ class ChatViewModel : MviViewModel<ChatState, ChatIntent, ChatEffect>(ChatState(
                                     error = error
                                 )
                             }
-                            sendEffect(ChatEffect.ShowError("fiqh_core Token Analysis Error: $error"))
+                            sendEffect(ChatEffect.ShowError("AI Analysis Error: $error"))
                         }
                     )
                 } ?: run {
                     // Fallback to simulation if AI manager not available
-                    simulateTokenAnalysisResponse(token)
+                    simulateTokenAnalysisResponse(userInput)
                 }
-                
+
             } catch (e: Exception) {
-                updateState { 
+                updateState {
                     copy(
                         isStreaming = false,
                         error = e.message
                     )
                 }
-                sendEffect(ChatEffect.ShowError("Failed to analyze token"))
+                sendEffect(ChatEffect.ShowError("Failed to analyze input"))
             }
         }
     }

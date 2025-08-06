@@ -155,12 +155,24 @@ impl AverroesSystem {
         }
     }
 
-    /// Analyze if a cryptocurrency is halal or haram
+    /// Analyze any Islamic finance question with content filtering
     pub async fn analyze_token(
         &self,
-        token: String,
+        user_input: String,
     ) -> Result<QueryResponse, AverroesError> {
-        log::warn!("🔥 RUST DEBUG: analyze_token({token}) called!");
+        log::warn!("🔥 RUST DEBUG: analyze_token({user_input}) called!");
+
+        // Content filtering - block inappropriate requests
+        let filtered_result = self.filter_content(&user_input);
+        if let Some(error_message) = filtered_result {
+            return Ok(QueryResponse {
+                query_id: format!("filtered_{}", chrono::Utc::now().timestamp()),
+                response: error_message,
+                confidence: 0.0,
+                sources: vec!["Content Filter".to_string()],
+                timestamp: chrono::Utc::now().timestamp() as u64,
+            });
+        }
 
         // Extract agent Arc or identify as Mock, outside the spawn
         let (groq_agent, is_groq) = {
@@ -173,28 +185,27 @@ impl AverroesSystem {
 
         // Use the shared runtime to spawn async task (UniFFI best practice)
         let handle = self.runtime.spawn(async move {
-            log::info!("🔍 Analyzing token: {token}");
+            log::info!("🔍 Analyzing user input: {}", user_input.chars().take(50).collect::<String>());
 
             let response = match groq_agent {
                 Some(agent) => {
                     log::info!("🤖 Using Groq AI for analysis...");
 
-                    let user_question = format!(
-                        "Analyze the cryptocurrency '{token}' from an Islamic finance perspective.
-                         Consider factors like: speculation, utility, volatility, underlying technology.
-                         Provide a clear halal/haram ruling with reasoning."
-                    );
+                    // Detect language for response
+                    let detected_language = Self::detect_language(&user_input);
 
                     let prompt = format!(
-                        "The user will ask the following: {user_question}
+                        "The user will ask the following: {user_input}
 
 Before answering the question, please analyze the following sources:
-1. https://www.cryptohalal.cc/currencies/4
-2. https://sharlife.my/crypto-shariah/crypto/bitcoin
+1. https://www.cryptohalal.cc/currencies/
+2. https://sharlife.my/crypto-shariah/crypto
 3. https://www.islamicfinanceguru.com/crypto
 4. https://app.practicalislamicfinance.com/reports/crypto/
 
-Now please answer the user's question based on your analysis of these sources and Islamic finance principles."
+Now please answer the user's question based on your analysis of these sources and Islamic finance principles.
+
+IMPORTANT: Please respond in {detected_language} language, the same language the user used in their question."
                     );
 
                     // Use direct agent prompting (following Rig examples)
@@ -209,17 +220,16 @@ Now please answer the user's question based on your analysis of these sources an
                 None => {
                     log::info!("🎭 Using Mock agent for analysis...");
                     format!(
-                        "**{token} Analysis**\n\n🔴 **Ruling: Haram (Prohibited)**\n\n**Reasoning:** Excessive \
-                         volatility and speculation make {token} problematic under Islamic finance principles. The \
-                         lack of intrinsic value and speculative nature conflict with Sharia guidelines on risk and \
-                         uncertainty (gharar).\n\n**Recommendation:** Consult with qualified Islamic scholars for \
-                         personalized guidance."
+                        "**Analysis Response**\n\n🔴 **Mock Response for Testing**\n\n**Input:** {}\n\n**Note:** This is a \
+                         simulated response for testing purposes. In the real implementation, this would provide Islamic \
+                         finance guidance based on your question. Please consult qualified Islamic scholars for actual \
+                         religious guidance.", user_input.chars().take(50).collect::<String>()
                     )
                 },
             };
 
             Ok(QueryResponse {
-                query_id: format!("token_{}_{}", token, chrono::Utc::now().timestamp()),
+                query_id: format!("analysis_{}_{}", chrono::Utc::now().timestamp(), user_input.chars().take(10).collect::<String>()),
                 response,
                 confidence: if is_groq {
                     0.9
@@ -248,12 +258,24 @@ Now please answer the user's question based on your analysis of these sources an
         }
     }
 
-    /// Handle general queries about Islamic finance
+    /// Handle general queries about Islamic finance with content filtering
     pub async fn query(
         &self,
         question: String,
     ) -> Result<QueryResponse, AverroesError> {
         log::warn!("🔥 RUST DEBUG: query({}) called!", question.chars().take(30).collect::<String>());
+
+        // Content filtering - block inappropriate requests
+        let filtered_result = self.filter_content(&question);
+        if let Some(error_message) = filtered_result {
+            return Ok(QueryResponse {
+                query_id: format!("query_{}", chrono::Utc::now().timestamp()),
+                response: error_message,
+                confidence: 0.0,
+                sources: vec!["Content Filter".to_string()],
+                timestamp: chrono::Utc::now().timestamp() as u64,
+            });
+        }
 
         // Extract agent Arc or identify as Mock, outside the spawn
         let (groq_agent, is_groq) = {
@@ -272,22 +294,21 @@ Now please answer the user's question based on your analysis of these sources an
                 Some(agent) => {
                     log::info!("🤖 Using Groq AI for query...");
 
-                    let user_question = format!(
-                        "From an Islamic finance and Fiqh perspective, please answer: {question}
-                         Provide clear guidance based on Sharia principles and recommend consulting scholars when \
-                         appropriate."
-                    );
+                    // Detect language for response
+                    let detected_language = Self::detect_language(&question);
 
                     let prompt = format!(
-                        "The user will ask the following: {}
+                        "The user will ask the following: {question}
 
 Before answering the question, please analyze the following sources:
-1. https://www.cryptohalal.cc/currencies/4
-2. https://sharlife.my/crypto-shariah/crypto/bitcoin
+1. https://www.cryptohalal.cc/currencies/
+2. https://sharlife.my/crypto-shariah/crypto
 3. https://www.islamicfinanceguru.com/crypto
 4. https://app.practicalislamicfinance.com/reports/crypto/
 
-Now please answer the user's question based on your analysis of these sources and Islamic finance principles.", user_question
+Now please answer the user's question based on your analysis of these sources and Islamic finance principles.
+
+IMPORTANT: Please respond in {detected_language} language, the same language the user used in their question."
                     );
 
                     // Use direct agent prompting (following Rig examples)
@@ -664,6 +685,57 @@ Now please answer the user's question based on your analysis of these sources an
 // ============================================================================
 
 impl AverroesSystem {
+    /// Content filtering to prevent inappropriate requests
+    fn filter_content(&self, input: &str) -> Option<String> {
+        let input_lower = input.to_lowercase();
+
+        // Block image generation requests
+        if input_lower.contains("generate image") ||
+           input_lower.contains("create image") ||
+           input_lower.contains("make image") ||
+           input_lower.contains("draw") ||
+           input_lower.contains("picture") && (input_lower.contains("generate") || input_lower.contains("create")) {
+            return Some("I'm sorry, but I cannot generate images. I'm specialized in Islamic finance guidance and can help you with cryptocurrency analysis, halal investment questions, and Sharia compliance matters.".to_string());
+        }
+
+        // Block code generation requests
+        if input_lower.contains("generate code") ||
+           input_lower.contains("write code") ||
+           input_lower.contains("create code") ||
+           input_lower.contains("programming") && (input_lower.contains("help") || input_lower.contains("write")) {
+            return Some("I'm sorry, but I cannot generate programming code. I'm specialized in Islamic finance guidance. I can help you with cryptocurrency analysis, halal investment questions, and Sharia compliance matters.".to_string());
+        }
+
+        // Block inappropriate content
+        if input_lower.contains("hack") ||
+           input_lower.contains("illegal") ||
+           input_lower.contains("fraud") {
+            return Some("I cannot provide guidance on illegal or unethical activities. I'm here to help with Islamic finance questions and halal investment guidance.".to_string());
+        }
+
+        None // No filtering needed
+    }
+
+    /// Simple language detection based on common patterns
+    fn detect_language(input: &str) -> &'static str {
+        let input_lower = input.to_lowercase();
+
+        // Arabic detection
+        if input.chars().any(|c| c >= '\u{0600}' && c <= '\u{06FF}') {
+            return "Arabic";
+        }
+
+        // Indonesian/Malay detection
+        if input_lower.contains("halal") || input_lower.contains("haram") ||
+           input_lower.contains("syariah") || input_lower.contains("islam") ||
+           input_lower.contains("apakah") || input_lower.contains("bagaimana") {
+            return "Indonesian";
+        }
+
+        // Default to English
+        "English"
+    }
+
     /// Create Groq agent following Rig example pattern
     async fn create_groq_agent()
     -> Result<rig::agent::Agent<groq::CompletionModel>, Box<dyn std::error::Error + Send + Sync>> {
