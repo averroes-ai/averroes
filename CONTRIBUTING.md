@@ -10,6 +10,7 @@ Thank you for your interest in contributing to Fiqh Advisor! This document provi
 - [Development Workflow](#development-workflow)
 - [Code Standards](#code-standards)
 - [Testing Guidelines](#testing-guidelines)
+- [AI System Diagnostics](DIAGNOSTIC_GUIDE.md) 🔗
 - [Submitting Changes](#submitting-changes)
 - [Troubleshooting](#troubleshooting)
 
@@ -73,11 +74,11 @@ curl -sSLO https://github.com/pinterest/ktlint/releases/latest/download/ktlint &
 
    ```bash
    # Fork the repository on GitHub first, then:
-   git clone https://github.com/YOUR_USERNAME/fiqhadvisor.git
-   cd fiqhadvisor
+   git clone https://github.com/YOUR_USERNAME/averroes.git
+   cd averroes
 
    # Add upstream remote
-   git remote add upstream https://github.com/rizilab/fiqhadvisor.git
+   git remote add upstream https://github.com/rizilab/averroes.git
    ```
 
 2. **Configure Rust**
@@ -185,11 +186,11 @@ RUST_BACKTRACE=1
 ### Codebase Overview
 
 ```
-fiqhadvisor/
+averroes/
 ├── android/                    # Android application
 │   ├── app/
 │   │   ├── src/main/
-│   │   │   ├── java/com/rizilab/fiqhadvisor/
+│   │   │   ├── java/com/rizilab/averroes/
 │   │   │   │   ├── MainActivity.kt        # Main entry point
 │   │   │   │   ├── ui/                    # Compose UI components
 │   │   │   │   │   ├── components/        # Reusable UI components
@@ -199,8 +200,8 @@ fiqhadvisor/
 │   │   │   └── res/                       # Android resources
 │   │   └── build.gradle.kts
 │   ├── core/                              # UniFFI bindings module
-│   │   ├── src/main/java/com/rizilab/fiqhadvisor/core/
-│   │   │   └── FiqhAIManager.kt          # Kotlin wrapper for Rust
+│   │   ├── src/main/java/com/rizilab/averroes/core/
+│   │   │   └── AverroesManager.kt          # Kotlin wrapper for Rust
 │   │   └── build.gradle.kts              # UniFFI build configuration
 │   └── build.gradle.kts                  # Root Android build
 ├── crates/                               # Rust workspace
@@ -298,8 +299,8 @@ fiqhadvisor/
    ```rust
    // crates/core/src/lib.rs
    #[uniffi::export]
-   impl FiqhAISystem {
-       pub async fn new_function(&self, param: String) -> Result<String, FiqhAIError> {
+   impl AverroesSystem {
+       pub async fn new_function(&self, param: String) -> Result<String, AverroesError> {
            // Implementation
            Ok("result".to_string())
        }
@@ -315,7 +316,7 @@ fiqhadvisor/
 3. **Update Kotlin Wrapper**
 
    ```kotlin
-   // android/core/src/main/java/com/rizilab/fiqhadvisor/core/FiqhAIManager.kt
+   // android/core/src/main/java/com/rizilab/averroes/core/AverroesManager.kt
    suspend fun newFunction(param: String): String {
        return fiqhSystem?.newFunction(param) ?: throw IllegalStateException("System not initialized")
    }
@@ -331,7 +332,7 @@ fiqhadvisor/
 1. **Create Composable**
 
    ```kotlin
-   // android/app/src/main/java/com/rizilab/fiqhadvisor/ui/components/NewComponent.kt
+   // android/app/src/main/java/com/rizilab/averroes/ui/components/NewComponent.kt
    @Composable
    fun NewComponent(
        modifier: Modifier = Modifier
@@ -411,7 +412,7 @@ The actor system is central to our architecture. Here's how to work with it:
 /// * `analysis_type` - Type of analysis to perform
 ///
 /// # Returns
-/// * `Result<AnalysisResult, FiqhAIError>` - Analysis result or error
+/// * `Result<AnalysisResult, AverroesError>` - Analysis result or error
 ///
 /// # Example
 /// ```rust
@@ -421,12 +422,12 @@ The actor system is central to our architecture. Here's how to work with it:
 /// ).await?;
 /// ```
 #[uniffi::export]
-impl FiqhAISystem {
+impl AverroesSystem {
     pub async fn analyze_token(
         &self,
         contract_address: String,
         analysis_type: AnalysisType,
-    ) -> Result<AnalysisResult, FiqhAIError> {
+    ) -> Result<AnalysisResult, AverroesError> {
         // Implementation...
         todo!()
     }
@@ -438,7 +439,7 @@ impl FiqhAISystem {
 ```rust
 // Use custom error types
 #[derive(uniffi::Error, thiserror::Error, Debug)]
-pub enum FiqhAIError {
+pub enum AverroesError {
     #[error("Network error: {message}")]
     NetworkError { message: String },
 
@@ -447,9 +448,9 @@ pub enum FiqhAIError {
 }
 
 // Proper error propagation
-pub async fn risky_operation() -> Result<String, FiqhAIError> {
+pub async fn risky_operation() -> Result<String, AverroesError> {
     let data = fetch_data().await
-        .map_err(|e| FiqhAIError::NetworkError {
+        .map_err(|e| AverroesError::NetworkError {
             message: e.to_string()
         })?;
 
@@ -476,14 +477,14 @@ insert_final_newline = true
 
 ```kotlin
 /**
- * Manages the FiqhAI system integration for Android
+ * Manages the Averroes system integration for Android
  */
-class FiqhAIManager {
+class AverroesManager {
     private var fiqhSystem: FiqhAiSystem? = null
     private val coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     /**
-     * Initializes the FiqhAI system
+     * Initializes the Averroes system
      * @param context Android context for initialization
      */
     suspend fun initialize(context: Context) {
@@ -495,7 +496,7 @@ class FiqhAIManager {
 
             fiqhSystem = FiqhAiSystem(config)
         } catch (e: Exception) {
-            Log.e("FiqhAIManager", "Initialization failed", e)
+            Log.e("AverroesManager", "Initialization failed", e)
             throw e
         }
     }
@@ -557,6 +558,25 @@ refactor(rust): simplify actor message handling
 
 ## 🧪 Testing Guidelines
 
+### AI System Diagnostic Testing
+
+For comprehensive AI system testing and troubleshooting, see our dedicated **[Diagnostic Guide](DIAGNOSTIC_GUIDE.md)** which covers:
+
+- 🔧 Built-in diagnostic features
+- 📱 Step-by-step testing procedures  
+- 🖥️ Log monitoring and analysis
+- 🚨 Troubleshooting common issues
+- 📋 Quick reference commands
+
+**Quick Start:**
+```bash
+# Run automated diagnostic test
+./test_ai_system.sh test
+
+# Monitor AI system logs
+adb logcat -v time | grep "AISystemDiagnostics" --color=always
+```
+
 ### Rust Testing
 
 #### Unit Tests
@@ -569,8 +589,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_token_analysis() {
-        let config = FiqhAIConfig::default();
-        let system = FiqhAISystem::new(config).await.unwrap();
+        let config = AverroesConfig::default();
+        let system = AverroesSystem::new(config).await.unwrap();
 
         let result = system.analyze_token(
             "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v".to_string(),
@@ -600,11 +620,11 @@ async fn test_full_analysis_workflow() {
 
 ```kotlin
 @RunWith(JUnit4::class)
-class FiqhAIManagerTest {
+class AverroesManagerTest {
     @Test
     fun testInitialization() = runTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        val manager = FiqhAIManager()
+        val manager = AverroesManager()
 
         manager.initialize(context)
         assertTrue(manager.isInitialized())
@@ -712,6 +732,15 @@ Your PR will be reviewed for:
 
 ## 🛠 Troubleshooting
 
+### AI System Issues
+
+For AI-specific troubleshooting including system initialization, API connectivity, and diagnostic testing, see the comprehensive **[Diagnostic Guide](DIAGNOSTIC_GUIDE.md)**.
+
+**Common AI Issues:**
+- System initialization failures → See [Diagnostic Guide - System Initialization](DIAGNOSTIC_GUIDE.md#issue-system-initialization-fails)
+- Fallback responses instead of AI → See [Diagnostic Guide - AI Responses](DIAGNOSTIC_GUIDE.md#issue-ai-responses-are-fallback-messages)
+- App crashes on startup → See [Diagnostic Guide - App Crashes](DIAGNOSTIC_GUIDE.md#issue-app-crashes-on-startup)
+
 ### Common Issues
 
 #### Build Issues
@@ -775,9 +804,9 @@ just generate-bindings
 
 ### Getting Help
 
-1. **Check Existing Issues**: [GitHub Issues](https://github.com/rizilab/fiqhadvisor/issues)
+1. **Check Existing Issues**: [GitHub Issues](https://github.com/rizilab/averroes/issues)
 2. **Search Documentation**: README.md and inline docs
-3. **Ask Questions**: [GitHub Discussions](https://github.com/rizilab/fiqhadvisor/discussions)
+3. **Ask Questions**: [GitHub Discussions](https://github.com/rizilab/averroes/discussions)
 4. **Join Community**: Discord/Telegram links in main README
 
 ### Debug Tips
@@ -797,10 +826,10 @@ just mobile-dev
 
 ```bash
 # View logs
-adb logcat | grep FiqhAdvisor
+adb logcat | grep averroes
 
 # Debug specific component
-adb logcat | grep FiqhAIManager
+adb logcat | grep AverroesManager
 ```
 
 ---

@@ -8,8 +8,16 @@
 
 pub mod chains;
 pub mod embeddings;
+pub mod grok_client;
+pub mod groq_client;
 pub mod models;
+pub mod openai_client;
+pub mod service;
 
 pub use chains::*;
 pub use embeddings::*;
+pub use grok_client::*;
+pub use groq_client::*;
 pub use models::*;
+pub use openai_client::*;
+pub use service::*;

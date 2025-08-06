@@ -12,7 +12,7 @@ axum.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 serde.workspace = true
-fiqh_core = { path = "../core" }
+averroes_core = { path = "../core" }
 
 [lints]
 workspace = true

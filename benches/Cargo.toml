@@ -7,7 +7,7 @@ workspace = ".."
 
 [dev-dependencies]
 criterion.workspace = true
-fiqh_core = { path = "../crates/core" }
+averroes_core = { path = "../crates/core" }
 tokio = { workspace = true, features = ["full"] }
 futures = { workspace = true }
 uuid = { workspace = true }

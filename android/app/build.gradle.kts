@@ -2,14 +2,16 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.devtools.ksp") version "2.0.0-1.0.23"
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 android {
-    namespace = "com.rizilab.fiqhadvisor"
+    namespace = "com.rizilab.averroes"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.rizilab.fiqhadvisor"
+        applicationId = "com.rizilab.averroes"
         minSdk = 24
         targetSdk = 34
         versionCode = 1
@@ -19,15 +21,37 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        // Ensure all architectures are included
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+        }
+    }
+
+    signingConfigs {
+        create("release") {
+            // Use debug keystore for easier installation
+            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "SOLANA_NETWORK", "\"devnet\"")
+            buildConfigField("String", "RPC_URL", "\"https://api.devnet.solana.com\"")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            buildConfigField("String", "SOLANA_NETWORK", "\"mainnet\"")
+            buildConfigField("String", "RPC_URL", "\"https://api.mainnet-beta.solana.com\"")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     
@@ -42,6 +66,7 @@ android {
     
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     
     composeOptions {
@@ -57,7 +82,7 @@ android {
 }
 
 dependencies {
-    // Core module with UniFFI bindings
+    // Core module with UniFFI bindings (re-enabled for fiqh_core integration)
     implementation(project(":core"))
 
     // Android Core
@@ -85,6 +110,45 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     
+    // Koin for dependency injection (re-enabled for AI integration)
+    implementation("io.insert-koin:koin-android:3.5.3")
+    implementation("io.insert-koin:koin-androidx-compose:3.5.3")
+
+    // Kotlinx Serialization for wallet data storage
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+
+    // HTTP client for Solana RPC calls
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    
+    // Coil for image loading
+    implementation("io.coil-kt:coil-compose:2.5.0")
+
+    // Mobile Wallet Adapter for Solana wallet connection (re-enabled for wallet integration)
+    implementation("com.solanamobile:mobile-wallet-adapter-clientlib:2.0.0")
+    implementation("com.solanamobile:mobile-wallet-adapter-clientlib-ktx:2.0.0")
+    implementation("com.neovisionaries:nv-websocket-client:2.14")
+
+    // Networking for crypto API calls
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+
+    // Solana Web3 for blockchain interactions
+    implementation("com.solanamobile:web3-solana:0.3.0-beta4")
+
+    // Charts for crypto price visualization
+    implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
+
+    // Biometric authentication
+    implementation("androidx.biometric:biometric:1.1.0")
+
+    // BIP39 mnemonic generation (temporarily commented due to repository issues)
+    // implementation("io.github.novacrypto:BIP39:2019.01.27")
+    // implementation("io.github.novacrypto:SecureString:2019.01.27")
+
+    // Security and encryption
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
     // Testing
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

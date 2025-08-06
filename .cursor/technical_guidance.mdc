@@ -9,11 +9,10 @@ alwaysApply: false
 - Actor Pattern with Tokio: Based on the blog (https://ryhl.io/blog/actors-with-tokio/), we'll model components as actors (e.g., QueryActor for user inputs, ScraperActor for data fetching, AnalyzerActor for AI processing). Each actor runs in a Tokio task, communicating via channels (mpsc or broadcast). This provides low-latency, fault-isolated concurrency for handling multiple user sessions, blockchain queries, and AI chains without blocking the main thread.
 - Rust Libraries:
 
-1. `rig`: For high-level AI agent orchestration (e.g., chaining prompts for fatwa analysis).
+1. `rig`: For high-level AI agent orchestration (e.g., chaining prompts for fatwa analysis, text-to-analysis chain incorporating scraping and vector search).
 2. `rmcp`: For managing AI model control planes (e.g., loading local models or interfacing with external APIs like Grok).
-3. `langchain-rs`: To build chains for processing inputs (e.g., text-to-analysis chain incorporating scraping and vector search).
-4. `qdrant`: As a vector DB for storing embeddings of fatwas, token metadata, and histories; enables semantic search for accurate halal categorizations.
-5. Additional: `solana-sdk` for Solana interactions, `reqwest` for HTTP scraping, `serde` for serialization, `tokio` for async, `uniffi` for FFI bindings.
+3. `qdrant`: As a vector DB for storing embeddings of fatwas, token metadata, and histories; enables semantic search for accurate halal categorizations.
+4. Additional: `solana-sdk` for Solana interactions, `reqwest` for HTTP scraping, `serde` for serialization, `tokio` for async, `uniffi` for FFI bindings.
 
 - Multiplatform Sharing:
 

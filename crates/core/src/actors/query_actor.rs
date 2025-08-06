@@ -20,7 +20,7 @@ pub struct QueryActor {
     receiver: mpsc::Receiver<QueryMessage>,
     scraper_handle: ScraperActorHandle,
     analyzer_handle: AnalyzerActorHandle,
-    history_handle: HistoryActorHandle,
+    history_handle: Option<HistoryActorHandle>,
     query_cache: HashMap<String, Vec<Query>>, // user_id -> queries
 }
 
@@ -29,7 +29,7 @@ impl QueryActor {
         receiver: mpsc::Receiver<QueryMessage>,
         scraper_handle: ScraperActorHandle,
         analyzer_handle: AnalyzerActorHandle,
-        history_handle: HistoryActorHandle,
+        history_handle: Option<HistoryActorHandle>,
     ) -> Self {
         Self {
             receiver,
@@ -186,9 +186,11 @@ impl QueryActor {
         // Analyze the scraped data
         match self.analyzer_handle.analyze_token(query.clone(), scraped_data).await {
             Ok(analysis) => {
-                // Save analysis to history
-                if let Err(e) = self.history_handle.save_analysis(analysis.clone(), query.clone()).await {
-                    warn!("Failed to save analysis to history: {:?}", e);
+                // Save analysis to history (if available)
+                if let Some(ref history_handle) = self.history_handle {
+                    if let Err(e) = history_handle.save_analysis(analysis.clone(), query.clone()).await {
+                        warn!("Failed to save analysis to history: {:?}", e);
+                    }
                 }
 
                 QueryResponse {
@@ -248,9 +250,11 @@ impl QueryActor {
         // Analyze the token
         match self.analyzer_handle.analyze_token(query.clone(), scraped_data).await {
             Ok(analysis) => {
-                // Save to history
-                if let Err(e) = self.history_handle.save_analysis(analysis.clone(), query.clone()).await {
-                    warn!("Failed to save token analysis to history: {:?}", e);
+                // Save to history (if available)
+                if let Some(ref history_handle) = self.history_handle {
+                    if let Err(e) = history_handle.save_analysis(analysis.clone(), query.clone()).await {
+                        warn!("Failed to save token analysis to history: {:?}", e);
+                    }
                 }
 
                 let ruling_text = self.format_islamic_ruling(&analysis.islamic_analysis);
@@ -337,9 +341,11 @@ impl QueryActor {
         // Analyze the token
         match self.analyzer_handle.analyze_token(query.clone(), scraped_data).await {
             Ok(analysis) => {
-                // Save to history
-                if let Err(e) = self.history_handle.save_analysis(analysis.clone(), query.clone()).await {
-                    warn!("Failed to save contract analysis to history: {:?}", e);
+                // Save to history (if available)
+                if let Some(ref history_handle) = self.history_handle {
+                    if let Err(e) = history_handle.save_analysis(analysis.clone(), query.clone()).await {
+                        warn!("Failed to save contract analysis to history: {:?}", e);
+                    }
                 }
 
                 let token_name = token_info
@@ -581,7 +587,7 @@ impl QueryActor {
 pub async fn spawn_query_actor(
     scraper_handle: ScraperActorHandle,
     analyzer_handle: AnalyzerActorHandle,
-    history_handle: HistoryActorHandle,
+    history_handle: Option<HistoryActorHandle>,
 ) -> crate::models::QueryActorHandle {
     let (sender, receiver) = mpsc::channel(100);
 

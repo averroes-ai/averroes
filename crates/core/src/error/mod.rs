@@ -12,7 +12,7 @@ pub use api::{ApiError, ApiResult, ErrorResponse};
 
 pub use self::core::AIError;
 pub use self::core::ActorSystemError;
-pub use self::core::FiqhAIError;
+pub use self::core::AverroesError;
 pub use self::core::VectorDatabaseError;
 
 // For consistent error handling with location info

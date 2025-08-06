@@ -13,37 +13,61 @@ pub enum TokenStandard {
     },
 }
 
-/// Token metadata from blockchain
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Enum)]
+pub enum BlockchainNetwork {
+    Solana,
+    Ethereum,
+    BSC,
+    Polygon,
+    Other {
+        name: String,
+    },
+}
+
+/// Universal token metadata that works across different blockchains
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
 pub struct TokenMetadata {
     pub name: String,
     pub symbol: String,
-    pub mint_address: String,
+    pub contract_address: String, // Renamed from mint_address for chain-agnostic use
     pub decimals: u32,
     pub description: Option<String>,
     pub image_url: Option<String>,
     pub creator: Option<String>,
     pub verified: bool,
     pub token_standard: TokenStandard,
+    pub blockchain: BlockchainNetwork, // NEW: Identifies the source chain
 }
 
 impl TokenMetadata {
     pub fn new(
         name: String,
         symbol: String,
-        mint_address: String,
+        contract_address: String,
         decimals: u32,
+        blockchain: BlockchainNetwork,
     ) -> Self {
         Self {
             name,
             symbol,
-            mint_address,
+            contract_address,
             decimals,
             description: None,
             image_url: None,
             creator: None,
             verified: false,
-            token_standard: TokenStandard::SPL, // Default to SPL for Solana tokens
+            token_standard: match blockchain {
+                BlockchainNetwork::Solana => TokenStandard::SPL,
+                BlockchainNetwork::Ethereum | BlockchainNetwork::BSC | BlockchainNetwork::Polygon => {
+                    TokenStandard::ERC20
+                },
+                BlockchainNetwork::Other {
+                    ..
+                } => TokenStandard::Other {
+                    name: "Unknown".to_owned(),
+                },
+            },
+            blockchain,
         }
     }
 }
@@ -55,7 +79,8 @@ pub struct TokenPriceData {
     pub price_change_24h: f64,
     pub volume_24h: u64,
     pub market_cap: u64,
-    pub last_updated: u64, // Unix timestamp for UniFFI
+    pub total_supply: Option<f64>, // NEW: Added for comprehensive market data
+    pub last_updated: u64,         // Unix timestamp for UniFFI
 }
 
 /// Liquidity pool information
@@ -67,7 +92,20 @@ pub struct LiquidityPool {
     pub volume_24h: f64,
 }
 
-/// Solana token information
+/// Universal token information that works across different blockchains
+#[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
+pub struct UniversalTokenInfo {
+    pub address: String, // Contract/mint address as String for UniFFI
+    pub metadata: TokenMetadata,
+    pub price_data: Option<TokenPriceData>,
+    pub holders: Option<u64>,
+    pub liquidity_pools: Vec<LiquidityPool>,
+    pub is_verified: bool,
+    pub risk_score: Option<f64>,
+    pub blockchain: BlockchainNetwork, // NEW: Explicit chain identification
+}
+
+/// Solana-specific token information (for backward compatibility and Solana-specific features)
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
 pub struct SolanaTokenInfo {
     pub pubkey: String, // Pubkey as String for UniFFI
@@ -122,6 +160,7 @@ pub struct TokenHolders {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+
 pub struct SolanaTokenInfoInternal {
     pub pubkey: Pubkey,
     pub metadata: TokenMetadataInternal,
@@ -184,13 +223,14 @@ impl SolanaTokenInfo {
             metadata: TokenMetadata {
                 name: "Unknown Token".to_owned(),
                 symbol: "UNKNOWN".to_owned(),
-                mint_address: pubkey.to_string(),
+                contract_address: pubkey.to_string(),
                 decimals: 9,
                 description: None,
                 image_url: None,
                 creator: None,
                 verified: false,
                 token_standard: TokenStandard::SPL,
+                blockchain: BlockchainNetwork::Solana,
             },
             price_data: None,
             holders: None,
@@ -206,19 +246,21 @@ impl SolanaTokenInfo {
             metadata: TokenMetadata {
                 name: internal.metadata.name,
                 symbol: internal.metadata.symbol,
-                mint_address: internal.metadata.mint_address,
+                contract_address: internal.metadata.mint_address,
                 decimals: internal.metadata.decimals as u32,
                 description: internal.metadata.description,
                 image_url: internal.metadata.logo_uri,
                 creator: None,
                 verified: internal.is_verified,
                 token_standard: internal.metadata.token_standard,
+                blockchain: BlockchainNetwork::Solana,
             },
             price_data: internal.price_data.map(|pd| TokenPriceData {
                 price_usd: pd.price_usd,
                 price_change_24h: pd.price_change_24h,
                 volume_24h: pd.volume_24h as u64,
                 market_cap: pd.market_cap.unwrap_or(0.0) as u64,
+                total_supply: pd.circulating_supply,
                 last_updated: pd.timestamp.timestamp_millis() as u64,
             }),
             holders: internal.holders.map(|h| h.total_holders as u64),

@@ -6,7 +6,7 @@ edition.workspace = true
 workspace = "../.."
 
 [dependencies]
-fiqh_core = { path = "../core" }
+averroes_core = { path = "../core" }
 
 [lints]
 workspace = true

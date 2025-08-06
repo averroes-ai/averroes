@@ -1,9 +1,9 @@
 use thiserror::Error;
 
-/// Core `FiqhAI` system errors
+/// Core `Averroes` system errors
 #[derive(Debug, Error, uniffi::Error)]
 #[uniffi(flat_error)]
-pub enum FiqhAIError {
+pub enum AverroesError {
     #[error("Initialization failed: {0}")]
     InitializationError(String),
     #[error("Actor error: {0}")]
@@ -36,7 +36,7 @@ pub enum FiqhAIError {
     PermissionDenied(String),
 }
 
-impl FiqhAIError {
+impl AverroesError {
     pub fn initialization(msg: impl Into<String>) -> Self {
         Self::InitializationError(msg.into())
     }

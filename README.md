@@ -1,6 +1,6 @@
 # Fiqh Advisor - Your Sharia Trading Assistance
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/rizilab/fiqhadvisor)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/rizilab/averroes)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.80+-orange.svg)](https://www.rust-lang.org)
 [![Android](https://img.shields.io/badge/android-api%2024+-green.svg)](https://developer.android.com)
@@ -126,8 +126,8 @@ The Rust core uses an actor-based architecture for concurrent operations:
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/rizilab/fiqhadvisor.git
-   cd fiqhadvisor
+   git clone https://github.com/rizilab/averroes.git
+   cd averroes
    ```
 
 2. **Set up Rust toolchain**
@@ -184,19 +184,37 @@ just clean                # Clean all build artifacts
 just generate-bindings    # Generate UniFFI bindings only
 ```
 
+### Testing and Diagnostics
+
+For comprehensive AI system testing and troubleshooting, see our **[Diagnostic Guide](DIAGNOSTIC_GUIDE.md)** which includes:
+
+- 🔧 Built-in diagnostic features and automated testing
+- 📱 Step-by-step manual testing procedures
+- 🖥️ Real-time log monitoring and analysis
+- 🚨 Troubleshooting guide for common issues
+
+**Quick diagnostic test:**
+```bash
+# Run automated AI system test
+./test_ai_system.sh test
+
+# Monitor AI system logs in real-time
+adb logcat -v time | grep "AISystemDiagnostics" --color=always
+```
+
 ## 📱 Project Structure
 
 ```
-fiqhadvisor/
+averroes/
 ├── android/                    # Android application
 │   ├── app/                   # Main Android app module
-│   │   └── src/main/java/com/rizilab/fiqhadvisor/
+│   │   └── src/main/java/com/rizilab/averroes/
 │   │       ├── MainActivity.kt
 │   │       └── ui/            # Compose UI components
 │   ├── core/                  # Core Android module (UniFFI bindings)
 │   │   ├── build.gradle.kts   # Gradle build with UniFFI integration
-│   │   └── src/main/java/com/rizilab/fiqhadvisor/core/
-│   │       └── FiqhAIManager.kt  # Kotlin wrapper for Rust core
+│   │   └── src/main/java/com/rizilab/averroes/core/
+│   │       └── AverroesManager.kt  # Kotlin wrapper for Rust core
 │   └── build.gradle.kts       # Root Android build configuration
 ├── crates/                    # Rust workspace
 │   ├── core/                  # Main Rust library
@@ -242,7 +260,7 @@ fiqhadvisor/
    # 1. Add function to crates/core/src/lib.rs with #[uniffi::export]
    # 2. Regenerate bindings
    just generate-bindings
-   # 3. Update Kotlin wrapper in android/core/src/.../FiqhAIManager.kt
+   # 3. Update Kotlin wrapper in android/core/src/.../AverroesManager.kt
    # 4. Test the integration
    just mobile-dev
    ```
@@ -267,13 +285,13 @@ fiqhadvisor/
 
 ```rust
 // Initialize the system
-let config = FiqhAIConfig {
+let config = AverroesConfig {
     database_path: "path/to/db".to_string(),
     solana_rpc_url: "https://api.mainnet-beta.solana.com".to_string(),
     ai_model_config: Default::default(),
 };
 
-let system = FiqhAISystem::new(config).await?;
+let system = AverroesSystem::new(config).await?;
 
 // Analyze a token
 let query = Query::TokenAnalysis {
@@ -287,9 +305,9 @@ let response = system.process_query(query).await?;
 ### Android Kotlin API
 
 ```kotlin
-// Initialize through FiqhAIManager
+// Initialize through AverroesManager
 class MainActivity : ComponentActivity() {
-    private val fiqhManager = FiqhAIManager()
+    private val fiqhManager = AverroesManager()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -334,8 +352,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/rizilab/fiqhadvisor/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/rizilab/fiqhadvisor/discussions)
+- **Issues**: [GitHub Issues](https://github.com/rizilab/averroes/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/rizilab/averroes/discussions)
 - **Email**: support@rizilab.com
 
 ---

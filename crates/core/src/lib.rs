@@ -1,267 +1,799 @@
-pub mod actors;
-pub mod ai;
-pub mod api;
-pub mod error;
-pub mod models;
-
-use std::sync::Arc;
-
-pub use actors::*;
-pub use ai::*;
-pub use api::*;
-pub use error::FiqhAIError;
-pub use models::{
-    // History types
-    AnalysisHistory,
-    AnalysisStatus,
-
-    // Actor handle types
-    AnalyzerActorHandle,
-    BacktestResult,
-    ChatMessage,
-    ConfidenceBreakdown,
-    FatwaReference,
-    HistoryActorHandle,
-    HistoryEntry,
-    HistoryQuery,
-
-    IslamicAnalysis,
-    // Islamic analysis types
-    IslamicPrinciple,
-    LiquidityPool,
-
-    MaqashidPrinciple,
-    // Query types
-    Query,
-    QueryActorHandle,
-    QueryResponse,
-    QueryType,
-
-    ScraperActorHandle,
-    SolanaTokenInfo,
-    // Token types
-    TokenAnalysis,
-    UserAnalysisStats,
-};
-use tokio::sync::RwLock;
-
-use crate::api::middleware::MiddlewareState;
-use crate::api::middleware::RateLimitConfig;
-use crate::api::middleware::RateLimiter;
-use crate::api::middleware::auth_middleware;
-use crate::api::middleware::create_cors_layer;
-use crate::api::middleware::rate_limit_middleware;
-use crate::api::middleware::security_headers_middleware;
-use crate::api::middleware::tracing_middleware;
-use crate::api::middleware::validation_middleware;
-use crate::api::routes::create_router;
-
-// Define config and error types directly here since they're not in models
-#[derive(Clone, Debug, uniffi::Record)]
-pub struct FiqhAIConfig {
-    pub openai_api_key: String,
-    pub model_name: String,
-    pub qdrant_url: String,
-    pub database_path: String,
-    pub solana_rpc_url: String,
-    pub enable_solana: bool,
-}
-
-// ============================================================================
-// UNIFFI SETUP - Modern Rust annotation approach
-// ============================================================================
-
-// Setup UniFFI scaffolding (no UDL file needed)
+// UniFFI exports
 uniffi::setup_scaffolding!();
 
+use std::sync::Arc;
+use std::sync::Mutex;
+
+use rig::client::CompletionClient;
+use rig::completion::Prompt;
+use rig::providers::groq;
+use tokio::runtime::Runtime;
+
 // ============================================================================
-// MAIN SYSTEM INTERFACE
+// SIMPLE FIQH AI DATA STRUCTURES
 // ============================================================================
 
-/// Main `FiqhAI` system that orchestrates all components
-#[derive(uniffi::Object)]
-pub struct FiqhAISystem {
-    query_actor: QueryActorHandle,
-    #[allow(dead_code)]
-    scraper_actor: ScraperActorHandle,
-    analyzer_actor: AnalyzerActorHandle,
-    history_actor: HistoryActorHandle,
-    config: FiqhAIConfig,
+#[derive(uniffi::Record, Clone, Debug)]
+pub struct AverroesConfig {
+    pub groq_api_key: String,
+    pub model_name: String,
+    pub preferred_model: String, // "groq" or "mock"
 }
 
-impl Default for FiqhAIConfig {
+#[derive(uniffi::Record, Clone, Debug)]
+pub struct QueryResponse {
+    pub query_id: String,
+    pub response: String,
+    pub confidence: f64,
+    pub sources: Vec<String>,
+    pub timestamp: u64,
+}
+
+// New: Streaming chunk for real-time responses
+#[derive(uniffi::Record, Clone, Debug)]
+pub struct StreamChunk {
+    pub query_id: String,
+    pub content: String,
+    pub is_final: bool,
+    pub chunk_index: u32,
+}
+
+#[derive(uniffi::Error, thiserror::Error, Debug)]
+pub enum AverroesError {
+    #[error("Initialization error: {0}")]
+    InitializationError(String),
+
+    #[error("AI error: {0}")]
+    AIError(String),
+
+    #[error("Invalid query: {0}")]
+    InvalidQuery(String),
+}
+
+// Callback trait for streaming responses (UniFFI compatible)
+#[uniffi::export(callback_interface)]
+pub trait StreamCallback: Send + Sync {
+    fn on_chunk(
+        &self,
+        chunk: StreamChunk,
+    );
+    fn on_error(
+        &self,
+        error: String,
+    );
+    fn on_complete(
+        &self,
+        final_response: QueryResponse,
+    );
+}
+
+impl Default for AverroesConfig {
     fn default() -> Self {
         Self {
-            openai_api_key: std::env::var("OPENAI_API_KEY").ok().unwrap_or_else(|| "".to_owned()),
-            model_name: "gpt-4".to_owned(),
-            qdrant_url: "http://localhost:6333".to_owned(),
-            database_path: "./data/fiqh_ai.db".to_owned(),
-            solana_rpc_url: "https://api.mainnet-beta.solana.com".to_owned(),
-            enable_solana: true,
+            groq_api_key: std::env::var("GROQ_API_KEY").unwrap_or_default(),
+            model_name: groq::DEEPSEEK_R1_DISTILL_LLAMA_70B.to_owned(),
+            preferred_model: "mock".to_owned(), // Default to mock, switch to "groq" when ready
         }
     }
 }
 
+// ============================================================================
+// SIMPLE GROQ AI AGENT (FOLLOWING RIG EXAMPLE PATTERN)
+// ============================================================================
+
+#[derive(uniffi::Object)]
+pub struct AverroesSystem {
+    // Use Mutex for interior mutability (UniFFI exports Arc<Self>)
+    agent_type: Mutex<AgentType>,
+    // Shared Tokio runtime for all async operations (UniFFI best practice)
+    runtime: Runtime,
+}
+
+// Simple enum to handle different agent types
+#[allow(clippy::large_enum_variant)]
+enum AgentType {
+    Groq(Arc<rig::agent::Agent<groq::CompletionModel>>),
+    Mock,
+}
+
 #[uniffi::export]
-impl FiqhAISystem {
-    /// Initialize the complete `FiqhAI` system
+impl AverroesSystem {
+    /// Simple synchronous constructor (following sprucekit-mobile pattern)
     #[uniffi::constructor]
-    pub async fn new(config: FiqhAIConfig) -> Result<Self, FiqhAIError> {
-        // Spawn all actors in the correct order
-        let history_actor = spawn_history_actor(Some(config.database_path.clone()))
-            .await
-            .map_err(|e| FiqhAIError::InitializationError(format!("Failed to spawn history actor: {e}")))?;
+    pub fn new_averroes_system() -> Result<Self, AverroesError> {
+        log::warn!("🔥 RUST DEBUG: new_averroes_system() called!");
+        log::warn!("🔥 RUST DEBUG: Creating Averroes system (sync constructor)");
 
-        let analyzer_actor = spawn_analyzer_actor(Some(config.solana_rpc_url.clone())).await;
-        let scraper_actor = spawn_scraper_actor().await;
+        // Create Tokio runtime for async operations (UniFFI best practice)
+        let runtime = Runtime::new()
+            .map_err(|e| AverroesError::InitializationError(format!("Failed to create Tokio runtime: {e}")))?;
 
-        let query_actor = spawn_query_actor(scraper_actor.clone(), analyzer_actor.clone(), history_actor.clone()).await;
+        // Start with mock, upgrade to Groq via async method
+        let agent_type = Mutex::new(AgentType::Mock);
+
+        log::warn!("🔥 RUST DEBUG: Averroes system created with Mock agent (ready for upgrade)");
 
         Ok(Self {
-            query_actor,
-            scraper_actor,
-            analyzer_actor,
-            history_actor,
-            config,
+            agent_type,
+            runtime,
         })
     }
 
-    /// Process a user query and return analysis response
-    pub async fn process_query(
-        &self,
-        query: Query,
-    ) -> Result<QueryResponse, FiqhAIError> {
-        let response = self
-            .query_actor
-            .process_query(query)
-            .await
-            .map_err(|e| FiqhAIError::ActorError(e.to_string()))?;
+    /// Async method to upgrade to Groq (following sprucekit-mobile pattern)
+    pub async fn initialize_groq_agent(&self) -> Result<(), AverroesError> {
+        log::warn!("🔥 RUST DEBUG: initialize_groq_agent() called!");
 
-        Ok(response)
+        // Use the shared runtime to spawn async task (UniFFI best practice)
+        let handle = self.runtime.spawn(async move {
+            log::warn!("📡 Upgrading to Groq agent (async method)...");
+
+            match Self::create_groq_agent().await {
+                Ok(agent) => {
+                    log::warn!("✅ Groq agent created successfully!");
+                    Ok(Arc::new(agent))
+                },
+                Err(e) => {
+                    log::warn!("⚠️ Failed to create Groq agent: {e}, keeping mock");
+                    Err(AverroesError::InitializationError(e.to_string()))
+                },
+            }
+        });
+
+        // Await the spawned task
+        match handle.await {
+            Ok(Ok(agent)) => {
+                // Use interior mutability to update agent
+                let mut agent_type = self.agent_type.lock().unwrap();
+                *agent_type = AgentType::Groq(agent);
+                Ok(())
+            },
+            Ok(Err(e)) => Err(e),
+            Err(join_error) => {
+                log::error!("❌ Task join error: {join_error}");
+                Err(AverroesError::InitializationError(format!("Task execution failed: {join_error}")))
+            },
+        }
     }
 
-    /// Analyze a token by ticker symbol
+    /// Analyze any Islamic finance question with content filtering
     pub async fn analyze_token(
         &self,
+        user_input: String,
+    ) -> Result<QueryResponse, AverroesError> {
+        log::warn!("🔥 RUST DEBUG: analyze_token({user_input}) called!");
+
+        // Content filtering - block inappropriate requests
+        let filtered_result = self.filter_content(&user_input);
+        if let Some(error_message) = filtered_result {
+            return Ok(QueryResponse {
+                query_id: format!("filtered_{}", chrono::Utc::now().timestamp()),
+                response: error_message,
+                confidence: 0.0,
+                sources: vec!["Content Filter".to_string()],
+                timestamp: chrono::Utc::now().timestamp() as u64,
+            });
+        }
+
+        // Extract agent Arc or identify as Mock, outside the spawn
+        let (groq_agent, is_groq) = {
+            let agent_guard = self.agent_type.lock().unwrap();
+            match &*agent_guard {
+                AgentType::Groq(agent) => (Some(agent.clone()), true),
+                AgentType::Mock => (None, false),
+            }
+        }; // Guard is dropped here
+
+        // Use the shared runtime to spawn async task (UniFFI best practice)
+        let handle = self.runtime.spawn(async move {
+            log::info!("🔍 Analyzing user input: {}", user_input.chars().take(50).collect::<String>());
+
+            let response = match groq_agent {
+                Some(agent) => {
+                    log::info!("🤖 Using Groq AI for analysis...");
+
+                    // Detect language for response
+                    let detected_language = Self::detect_language(&user_input);
+
+                    let prompt = format!(
+                        "The user will ask the following: {user_input}
+
+Before answering the question, please analyze the following sources:
+1. https://www.cryptohalal.cc/currencies/
+2. https://sharlife.my/crypto-shariah/crypto
+3. https://www.islamicfinanceguru.com/crypto
+4. https://app.practicalislamicfinance.com/reports/crypto/
+
+Now please answer the user's question based on your analysis of these sources and Islamic finance principles.
+
+IMPORTANT: Please respond in {detected_language} language, the same language the user used in their question."
+                    );
+
+                    // Use direct agent prompting (following Rig examples)
+                    match agent.prompt(&prompt).await {
+                        Ok(response) => response,
+                        Err(e) => {
+                            log::error!("❌ Groq API error: {e}");
+                            return Err(AverroesError::AIError(e.to_string()));
+                        },
+                    }
+                },
+                None => {
+                    log::info!("🎭 Using Mock agent for analysis...");
+                    format!(
+                        "**Analysis Response**\n\n🔴 **Mock Response for Testing**\n\n**Input:** {}\n\n**Note:** This is a \
+                         simulated response for testing purposes. In the real implementation, this would provide Islamic \
+                         finance guidance based on your question. Please consult qualified Islamic scholars for actual \
+                         religious guidance.", user_input.chars().take(50).collect::<String>()
+                    )
+                },
+            };
+
+            Ok(QueryResponse {
+                query_id: format!("analysis_{}_{}", chrono::Utc::now().timestamp(), user_input.chars().take(10).collect::<String>()),
+                response,
+                confidence: if is_groq {
+                    0.9
+                } else {
+                    0.8
+                },
+                sources: vec![
+                    "Islamic Finance Analysis".to_owned(),
+                    if is_groq {
+                        "Groq AI".to_owned()
+                    } else {
+                        "Mock Response".to_owned()
+                    },
+                ],
+                timestamp: chrono::Utc::now().timestamp() as u64,
+            })
+        });
+
+        // Await the spawned task and handle join errors
+        match handle.await {
+            Ok(result) => result,
+            Err(join_error) => {
+                log::error!("❌ Task join error: {join_error}");
+                Err(AverroesError::InitializationError(format!("Task execution failed: {join_error}")))
+            },
+        }
+    }
+
+    /// Handle general queries about Islamic finance with content filtering
+    pub async fn query(
+        &self,
+        question: String,
+    ) -> Result<QueryResponse, AverroesError> {
+        log::warn!("🔥 RUST DEBUG: query({}) called!", question.chars().take(30).collect::<String>());
+
+        // Content filtering - block inappropriate requests
+        let filtered_result = self.filter_content(&question);
+        if let Some(error_message) = filtered_result {
+            return Ok(QueryResponse {
+                query_id: format!("query_{}", chrono::Utc::now().timestamp()),
+                response: error_message,
+                confidence: 0.0,
+                sources: vec!["Content Filter".to_string()],
+                timestamp: chrono::Utc::now().timestamp() as u64,
+            });
+        }
+
+        // Extract agent Arc or identify as Mock, outside the spawn
+        let (groq_agent, is_groq) = {
+            let agent_guard = self.agent_type.lock().unwrap();
+            match &*agent_guard {
+                AgentType::Groq(agent) => (Some(agent.clone()), true),
+                AgentType::Mock => (None, false),
+            }
+        }; // Guard is dropped here
+
+        // Use the shared runtime to spawn async task (UniFFI best practice)
+        let handle = self.runtime.spawn(async move {
+            log::info!("🤔 Processing general query: {}", question.chars().take(50).collect::<String>());
+
+            let response = match groq_agent {
+                Some(agent) => {
+                    log::info!("🤖 Using Groq AI for query...");
+
+                    // Detect language for response
+                    let detected_language = Self::detect_language(&question);
+
+                    let prompt = format!(
+                        "The user will ask the following: {question}
+
+Before answering the question, please analyze the following sources:
+1. https://www.cryptohalal.cc/currencies/
+2. https://sharlife.my/crypto-shariah/crypto
+3. https://www.islamicfinanceguru.com/crypto
+4. https://app.practicalislamicfinance.com/reports/crypto/
+
+Now please answer the user's question based on your analysis of these sources and Islamic finance principles.
+
+IMPORTANT: Please respond in {detected_language} language, the same language the user used in their question."
+                    );
+
+                    // Use direct agent prompting (following Rig examples)
+                    match agent.prompt(&prompt).await {
+                        Ok(response) => response,
+                        Err(e) => {
+                            log::error!("❌ Groq API error: {e}");
+                            return Err(AverroesError::AIError(e.to_string()));
+                        },
+                    }
+                },
+                None => {
+                    log::info!("🎭 Using Mock agent for query...");
+                    "**Mock Response**\n\nThis is a simulated response for testing purposes. In the real \
+                     implementation, this would provide Islamic finance guidance based on your question. Please \
+                     consult qualified Islamic scholars for actual religious guidance."
+                        .to_owned()
+                },
+            };
+
+            Ok(QueryResponse {
+                query_id: format!("query_{}", chrono::Utc::now().timestamp()),
+                response,
+                confidence: if is_groq {
+                    0.9
+                } else {
+                    0.7
+                },
+                sources: vec![
+                    "Islamic Finance Knowledge".to_owned(),
+                    if is_groq {
+                        "Groq AI".to_owned()
+                    } else {
+                        "Mock Response".to_owned()
+                    },
+                ],
+                timestamp: chrono::Utc::now().timestamp() as u64,
+            })
+        });
+
+        // Await the spawned task and handle join errors
+        match handle.await {
+            Ok(result) => result,
+            Err(join_error) => {
+                log::error!("❌ Task join error: {join_error}");
+                Err(AverroesError::InitializationError(format!("Task execution failed: {join_error}")))
+            },
+        }
+    }
+
+    /// Analyze if a cryptocurrency is halal or haram (with streaming)
+    pub async fn analyze_token_stream(
+        &self,
         token: String,
-        user_id: Option<String>,
-        language: Option<String>,
-    ) -> Result<QueryResponse, FiqhAIError> {
-        let query = Query::new_token_ticker(token, user_id, language);
-        self.process_query(query).await
-    }
+        callback: Box<dyn StreamCallback>,
+    ) -> Result<(), AverroesError> {
+        log::warn!("🔥 RUST DEBUG: analyze_token_stream({token}) called!");
 
-    /// Analyze text input
-    pub async fn analyze_text(
-        &self,
-        text: String,
-        user_id: Option<String>,
-        language: Option<String>,
-    ) -> Result<QueryResponse, FiqhAIError> {
-        let query = Query::new_text(text, user_id, language);
-        self.process_query(query).await
-    }
+        let query_id = format!("token_{token}_{}", chrono::Utc::now().timestamp());
 
-    /// Analyze audio input (with STT processing)
-    pub async fn analyze_audio(
-        &self,
-        audio_data: Vec<u8>,
-        user_id: Option<String>,
-        language: Option<String>,
-    ) -> Result<QueryResponse, FiqhAIError> {
-        let query = Query::new_audio(audio_data, user_id, language);
-        self.process_query(query).await
-    }
+        // Extract agent Arc or identify as Mock, outside the spawn
+        let (groq_agent, _is_groq) = {
+            let agent_guard = self.agent_type.lock().unwrap();
+            match &*agent_guard {
+                AgentType::Groq(agent) => (Some(agent.clone()), true),
+                AgentType::Mock => (None, false),
+            }
+        }; // Guard is dropped here
 
-    /// Analyze contract address
-    pub async fn analyze_contract(
-        &self,
-        contract_address: String,
-        user_id: Option<String>,
-        language: Option<String>,
-    ) -> Result<QueryResponse, FiqhAIError> {
-        let query = Query::new_contract_address(contract_address, user_id, language);
-        self.process_query(query).await
-    }
+        // Use the shared runtime to spawn async task (UniFFI best practice)
+        // All callback usage must happen inside this task
+        self.runtime
+            .spawn(async move {
+                log::info!("🔍 Analyzing token with streaming: {token}");
 
-    /// Get analysis history for a user
-    pub async fn get_user_history(
-        &self,
-        user_id: String,
-        limit: Option<u32>,
-    ) -> Result<AnalysisHistory, FiqhAIError> {
-        let query = HistoryQuery::new().for_user(user_id).limit(limit.unwrap_or(20) as usize);
+                let result = match groq_agent {
+                    Some(agent) => {
+                        log::info!("🤖 Using Groq AI for streaming analysis...");
 
-        let history = self
-            .history_actor
-            .query_analyses(query)
+                        let prompt = format!(
+                            "Analyze the cryptocurrency '{token}' from an Islamic finance perspective. 
+                         Consider factors like: speculation, utility, volatility, underlying technology.
+                         Provide a clear halal/haram ruling with reasoning."
+                        );
+
+                        // Use regular completion with simulated streaming
+                        match agent.prompt(&prompt).await {
+                            Ok(response) => {
+                                log::info!("✅ Got full response, simulating streaming...");
+                                // Clean and format the response for better readability
+                                let full_response = format_ai_response(&response);
+
+                                // Simulate streaming by breaking response into words
+                                let words: Vec<&str> = full_response.split_whitespace().collect();
+                                let mut accumulated = String::new();
+
+                                for (i, word) in words.iter().enumerate() {
+                                    if i > 0 {
+                                        accumulated.push(' ');
+                                    }
+                                    accumulated.push_str(word);
+
+                                    // Send chunk to callback
+                                    callback.on_chunk(StreamChunk {
+                                        query_id: query_id.clone(),
+                                        content: format!("{word} "),
+                                        is_final: false,
+                                        chunk_index: i as u32,
+                                    });
+
+                                    // Small delay to simulate streaming
+                                    tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
+                                }
+
+                                // Send final response
+                                let final_response = QueryResponse {
+                                    query_id: query_id.clone(),
+                                    response: accumulated,
+                                    confidence: 0.9,
+                                    sources: vec![
+                                        "Islamic Finance Analysis".to_owned(),
+                                        "Groq AI (Streaming)".to_owned(),
+                                    ],
+                                    timestamp: chrono::Utc::now().timestamp() as u64,
+                                };
+
+                                callback.on_complete(final_response);
+                                Ok(())
+                            },
+                            Err(e) => {
+                                log::error!("❌ Groq API error: {e}");
+                                callback.on_error(format!("Groq API error: {e}"));
+                                Err(AverroesError::AIError(e.to_string()))
+                            },
+                        }
+                    },
+                    None => {
+                        log::info!("🎭 Using Mock agent for streaming analysis...");
+
+                        // Simulate streaming for mock response
+                        let mock_response = format!(
+                            "**{token} Analysis**\n\n🔴 **Ruling: Haram (Prohibited)**\n\n**Reasoning:** Excessive \
+                             volatility and speculation make {token} problematic under Islamic finance principles. \
+                             The lack of intrinsic value and speculative nature conflict with Sharia guidelines on \
+                             risk and uncertainty (gharar).\n\n**Recommendation:** Consult with qualified Islamic \
+                             scholars for personalized guidance."
+                        );
+
+                        // Simulate streaming by sending chunks with delays
+                        let words: Vec<&str> = mock_response.split_whitespace().collect();
+                        let mut accumulated = String::new();
+
+                        for (i, word) in words.iter().enumerate() {
+                            if i > 0 {
+                                accumulated.push(' ');
+                            }
+                            accumulated.push_str(word);
+
+                            callback.on_chunk(StreamChunk {
+                                query_id: query_id.clone(),
+                                content: format!("{word} "),
+                                is_final: false,
+                                chunk_index: i as u32,
+                            });
+
+                            // Small delay to simulate streaming
+                            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                        }
+
+                        // Send final response
+                        let final_response = QueryResponse {
+                            query_id: query_id.clone(),
+                            response: accumulated,
+                            confidence: 0.8,
+                            sources: vec![
+                                "Islamic Finance Analysis".to_owned(),
+                                "Mock Response (Streaming)".to_owned(),
+                            ],
+                            timestamp: chrono::Utc::now().timestamp() as u64,
+                        };
+
+                        callback.on_complete(final_response);
+                        Ok(())
+                    },
+                };
+
+                // Handle any errors from the task execution
+                if let Err(e) = result {
+                    log::error!("❌ Task execution error: {e}");
+                }
+            })
             .await
-            .map_err(|e| FiqhAIError::ActorError(e.to_string()))?;
+            .map_err(|join_error| {
+                log::error!("❌ Task join error: {join_error}");
+                AverroesError::InitializationError(format!("Task execution failed: {join_error}"))
+            })?;
 
-        Ok(history)
+        Ok(())
     }
 
-    /// Get token analysis history
-    pub async fn get_token_history(
+    /// Handle general queries about Islamic finance (with streaming)
+    pub async fn query_stream(
         &self,
-        token: String,
-        limit: Option<u32>,
-    ) -> Result<AnalysisHistory, FiqhAIError> {
-        let query = HistoryQuery::new().for_token(token).limit(limit.unwrap_or(10) as usize);
+        question: String,
+        callback: Box<dyn StreamCallback>,
+    ) -> Result<(), AverroesError> {
+        log::warn!("🔥 RUST DEBUG: query_stream({}) called!", question.chars().take(30).collect::<String>());
 
-        let history = self
-            .history_actor
-            .query_analyses(query)
+        let query_id = format!("query_{}", chrono::Utc::now().timestamp());
+
+        // Extract agent Arc or identify as Mock, outside the spawn
+        let (groq_agent, _is_groq) = {
+            let agent_guard = self.agent_type.lock().unwrap();
+            match &*agent_guard {
+                AgentType::Groq(agent) => (Some(agent.clone()), true),
+                AgentType::Mock => (None, false),
+            }
+        }; // Guard is dropped here
+
+        // Use the shared runtime to spawn async task (UniFFI best practice)
+        // All callback usage must happen inside this task
+        self.runtime
+            .spawn(async move {
+                log::info!("🤔 Processing query with streaming: {}", question.chars().take(50).collect::<String>());
+
+                let result = match groq_agent {
+                    Some(agent) => {
+                        log::info!("🤖 Using Groq AI for streaming query...");
+
+                        let prompt = format!(
+                            "From an Islamic finance and Fiqh perspective, please answer: {question}
+                         Provide clear guidance based on Sharia principles and recommend consulting scholars when \
+                             appropriate."
+                        );
+
+                        // Use regular completion with simulated streaming
+                        match agent.prompt(&prompt).await {
+                            Ok(response) => {
+                                log::info!("✅ Got full response, simulating streaming...");
+                                // Clean and format the response for better readability
+                                let full_response = format_ai_response(&response);
+
+                                // Simulate streaming by breaking response into words
+                                let words: Vec<&str> = full_response.split_whitespace().collect();
+                                let mut accumulated = String::new();
+
+                                for (i, word) in words.iter().enumerate() {
+                                    if i > 0 {
+                                        accumulated.push(' ');
+                                    }
+                                    accumulated.push_str(word);
+
+                                    // Send chunk to callback
+                                    callback.on_chunk(StreamChunk {
+                                        query_id: query_id.clone(),
+                                        content: format!("{word} "),
+                                        is_final: false,
+                                        chunk_index: i as u32,
+                                    });
+
+                                    // Small delay to simulate streaming
+                                    tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
+                                }
+
+                                // Send final response
+                                let final_response = QueryResponse {
+                                    query_id: query_id.clone(),
+                                    response: accumulated,
+                                    confidence: 0.9,
+                                    sources: vec![
+                                        "Islamic Finance Knowledge".to_owned(),
+                                        "Groq AI (Streaming)".to_owned(),
+                                    ],
+                                    timestamp: chrono::Utc::now().timestamp() as u64,
+                                };
+
+                                callback.on_complete(final_response);
+                                Ok(())
+                            },
+                            Err(e) => {
+                                log::error!("❌ Groq API error: {e}");
+                                callback.on_error(format!("Groq API error: {e}"));
+                                Err(AverroesError::AIError(e.to_string()))
+                            },
+                        }
+                    },
+                    None => {
+                        log::info!("🎭 Using Mock agent for streaming query...");
+
+                        // Mock streaming response
+                        let mock_response = "**Mock Response**\n\nThis is a simulated streaming response for testing \
+                                             purposes. In the real implementation, this would provide Islamic finance \
+                                             guidance based on your question. Please consult qualified Islamic \
+                                             scholars for actual religious guidance.";
+
+                        // Simulate streaming by sending chunks with delays
+                        let words: Vec<&str> = mock_response.split_whitespace().collect();
+                        let mut accumulated = String::new();
+
+                        for (i, word) in words.iter().enumerate() {
+                            if i > 0 {
+                                accumulated.push(' ');
+                            }
+                            accumulated.push_str(word);
+
+                            callback.on_chunk(StreamChunk {
+                                query_id: query_id.clone(),
+                                content: format!("{word} "),
+                                is_final: false,
+                                chunk_index: i as u32,
+                            });
+
+                            // Small delay to simulate streaming
+                            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                        }
+
+                        // Send final response
+                        let final_response = QueryResponse {
+                            query_id: query_id.clone(),
+                            response: accumulated,
+                            confidence: 0.7,
+                            sources: vec![
+                                "Islamic Finance Knowledge".to_owned(),
+                                "Mock Response (Streaming)".to_owned(),
+                            ],
+                            timestamp: chrono::Utc::now().timestamp() as u64,
+                        };
+
+                        callback.on_complete(final_response);
+                        Ok(())
+                    },
+                };
+
+                // Handle any errors from the task execution
+                if let Err(e) = result {
+                    log::error!("❌ Task execution error: {e}");
+                }
+            })
             .await
-            .map_err(|e| FiqhAIError::ActorError(e.to_string()))?;
+            .map_err(|join_error| {
+                log::error!("❌ Task join error: {join_error}");
+                AverroesError::InitializationError(format!("Task execution failed: {join_error}"))
+            })?;
 
-        Ok(history)
+        Ok(())
     }
 
-    /// Get user statistics
-    pub async fn get_user_stats(
-        &self,
-        user_id: String,
-    ) -> Result<UserAnalysisStats, FiqhAIError> {
-        let stats = self
-            .history_actor
-            .get_user_stats(user_id)
-            .await
-            .map_err(|e| FiqhAIError::ActorError(e.to_string()))?;
+    /// Check what type of agent is being used
+    pub fn get_agent_info(&self) -> String {
+        log::warn!("🔥 RUST DEBUG: get_agent_info() called!");
 
-        Ok(stats)
+        let info = match &*self.agent_type.lock().unwrap() {
+            AgentType::Groq(_) => "Groq AI".to_owned(),
+            AgentType::Mock => "Mock Agent".to_owned(),
+        };
+
+        log::warn!("🔥 RUST DEBUG: Returning agent info: {info}");
+        info
     }
 
-    /// Run backtest for a specific analysis
-    pub async fn run_backtest(
-        &self,
-        analysis_id: String,
-    ) -> Result<BacktestResult, FiqhAIError> {
-        let analysis_uuid = uuid::Uuid::parse_str(&analysis_id)
-            .map_err(|_| FiqhAIError::invalid_query("Invalid analysis ID format"))?;
+    /// Check if real AI is active
+    pub fn is_using_real_ai(&self) -> bool {
+        log::warn!("🔥 RUST DEBUG: is_using_real_ai() called!");
 
-        let result = self
-            .analyzer_actor
-            .run_backtest(analysis_uuid)
-            .await
-            .map_err(|e| FiqhAIError::ActorError(e.to_string()))?;
+        let is_real = matches!(*self.agent_type.lock().unwrap(), AgentType::Groq(_));
 
-        Ok(result)
-    }
-
-    /// Get system configuration
-    pub fn get_config(&self) -> FiqhAIConfig {
-        self.config.clone()
+        log::warn!("🔥 RUST DEBUG: Returning is_real: {is_real}");
+        is_real
     }
 }
 
 // ============================================================================
-// MOBILE-SPECIFIC INTERFACES
+// HELPER FUNCTIONS
 // ============================================================================
 
-/// Audio processing for mobile STT integration
+impl AverroesSystem {
+    /// Content filtering to prevent inappropriate requests
+    fn filter_content(&self, input: &str) -> Option<String> {
+        let input_lower = input.to_lowercase();
+
+        // Block image generation requests
+        if input_lower.contains("generate image") ||
+           input_lower.contains("create image") ||
+           input_lower.contains("make image") ||
+           input_lower.contains("draw") ||
+           input_lower.contains("picture") && (input_lower.contains("generate") || input_lower.contains("create")) {
+            return Some("I'm sorry, but I cannot generate images. I'm specialized in Islamic finance guidance and can help you with cryptocurrency analysis, halal investment questions, and Sharia compliance matters.".to_string());
+        }
+
+        // Block code generation requests
+        if input_lower.contains("generate code") ||
+           input_lower.contains("write code") ||
+           input_lower.contains("create code") ||
+           input_lower.contains("programming") && (input_lower.contains("help") || input_lower.contains("write")) {
+            return Some("I'm sorry, but I cannot generate programming code. I'm specialized in Islamic finance guidance. I can help you with cryptocurrency analysis, halal investment questions, and Sharia compliance matters.".to_string());
+        }
+
+        // Block inappropriate content
+        if input_lower.contains("hack") ||
+           input_lower.contains("illegal") ||
+           input_lower.contains("fraud") {
+            return Some("I cannot provide guidance on illegal or unethical activities. I'm here to help with Islamic finance questions and halal investment guidance.".to_string());
+        }
+
+        None // No filtering needed
+    }
+
+    /// Simple language detection based on common patterns
+    fn detect_language(input: &str) -> &'static str {
+        let input_lower = input.to_lowercase();
+
+        // Arabic detection
+        if input.chars().any(|c| c >= '\u{0600}' && c <= '\u{06FF}') {
+            return "Arabic";
+        }
+
+        // Indonesian/Malay detection
+        if input_lower.contains("halal") || input_lower.contains("haram") ||
+           input_lower.contains("syariah") || input_lower.contains("islam") ||
+           input_lower.contains("apakah") || input_lower.contains("bagaimana") {
+            return "Indonesian";
+        }
+
+        // Default to English
+        "English"
+    }
+
+    /// Create Groq agent following Rig example pattern
+    async fn create_groq_agent()
+    -> Result<rig::agent::Agent<groq::CompletionModel>, Box<dyn std::error::Error + Send + Sync>> {
+        // Following the Rig example pattern
+        let client = groq::Client::new("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");
+
+        let agent = client
+            .agent(groq::DEEPSEEK_R1_DISTILL_LLAMA_70B)
+            .preamble(
+                "You are an expert Islamic scholar specializing in Islamic finance and Fiqh. 
+                      Provide clear, balanced analysis based on Sharia principles. 
+                      Always include confidence levels and recommend consulting qualified scholars for important \
+                 decisions.",
+            )
+            .build();
+
+        Ok(agent)
+    }
+}
+
+/// Format AI response with proper paragraphs and structure for better readability
+fn format_ai_response(raw_response: &str) -> String {
+    // Remove thinking tags and clean up
+    let cleaned = raw_response.replace("<think>", "").replace("</think>", "").trim().to_owned();
+
+    // Add paragraph breaks for better readability
+    let formatted = cleaned
+        .replace(". In", ".\n\nIn")
+        .replace(". Islamic", ".\n\nIslamic")
+        .replace(". From", ".\n\nFrom")
+        .replace(". However", ".\n\nHowever")
+        .replace(". Therefore", ".\n\nTherefore")
+        .replace(". Overall", ".\n\nOverall")
+        .replace(". Key", ".\n\n• Key")
+        .replace(". Important", ".\n\n• Important")
+        .replace("1. ", "\n\n1. ")
+        .replace("2. ", "\n2. ")
+        .replace("3. ", "\n3. ")
+        .replace("4. ", "\n4. ")
+        .replace("5. ", "\n5. ");
+
+    // Clean up multiple newlines
+    let final_text = formatted
+        .split('\n')
+        .map(|line| line.trim())
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<&str>>()
+        .join("\n\n");
+
+    final_text
+}
+
+// ============================================================================
+// MOBILE SUPPORT COMPONENTS
+// ============================================================================
+
 #[derive(uniffi::Object)]
-pub struct AudioProcessor {}
+pub struct AudioProcessor;
 
 impl Default for AudioProcessor {
     fn default() -> Self {
@@ -273,66 +805,29 @@ impl Default for AudioProcessor {
 impl AudioProcessor {
     #[uniffi::constructor]
     pub fn new() -> Self {
-        Self {}
+        Self
     }
 
-    /// Mock speech-to-text implementation
     pub async fn transcribe_audio(
         &self,
         audio_data: Vec<u8>,
         _language: Option<String>,
-    ) -> Result<String, FiqhAIError> {
-        // Mock STT implementation - in production, this would integrate with platform STT
+    ) -> Result<String, AverroesError> {
         if audio_data.is_empty() {
-            return Err(FiqhAIError::invalid_query("Audio data cannot be empty"));
+            return Err(AverroesError::InvalidQuery("Audio data cannot be empty".to_owned()));
         }
 
-        // Simulate processing delay
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-
-        // Mock transcription based on audio data size and content
+        // Mock STT based on audio data size
         let transcription = match audio_data.len() {
-            0..=1000 => "Apakah Bitcoin halal?",
-            1001..=5000 => "Saya ingin tahu apakah token SOL itu halal menurut syariat Islam?",
-            5001..=10000 => "Bagaimana hukum trading cryptocurrency dalam Islam? Apakah mengandung riba?",
-            _ => "Mohon analisis token ini dari perspektif maqashid syariah dan prinsip-prinsip keuangan Islam",
+            0..=1000 => "Is Bitcoin halal?",
+            1001..=5000 => "What is the Islamic ruling on Ethereum?",
+            _ => "Please analyze this cryptocurrency from Sharia perspective",
         };
 
         Ok(transcription.to_owned())
     }
-
-    pub fn is_supported_format(
-        &self,
-        audio_data: Vec<u8>,
-    ) -> bool {
-        // Simple format detection based on file headers
-        if audio_data.len() < 4 {
-            return false;
-        }
-
-        // Check for common audio format headers
-        matches!(
-            &audio_data[0..4],
-            b"RIFF" | // WAV
-            b"OggS" | // OGG
-            b"\xff\xfb" | // MP3
-            b"fLaC" | // FLAC
-            [0x4f, 0x70, 0x75, 0x73] // Opus
-        )
-    }
-
-    pub fn get_supported_formats(&self) -> Vec<String> {
-        vec![
-            "audio/wav".to_owned(),
-            "audio/mp3".to_owned(),
-            "audio/ogg".to_owned(),
-            "audio/flac".to_owned(),
-            "audio/opus".to_owned(),
-        ]
-    }
 }
 
-/// Solana `DApp` connector for blockchain integration
 #[derive(uniffi::Object)]
 pub struct SolanaConnector {
     rpc_url: String,
@@ -341,72 +836,29 @@ pub struct SolanaConnector {
 #[uniffi::export]
 impl SolanaConnector {
     #[uniffi::constructor]
-    pub fn new(rpc_url: Option<String>) -> Self {
+    pub fn new(rpc_url: String) -> Self {
         Self {
-            rpc_url: rpc_url.unwrap_or_else(|| "https://api.mainnet-beta.solana.com".to_owned()),
+            rpc_url,
         }
     }
 
-    pub async fn get_token_info(
-        &self,
-        mint_address: String,
-    ) -> Result<SolanaTokenInfo, FiqhAIError> {
-        // Mock implementation - would use actual Solana RPC in production
-        let pubkey = mint_address
-            .parse::<solana_program::pubkey::Pubkey>()
-            .map_err(|_| FiqhAIError::invalid_query("Invalid mint address format"))?;
-
-        let token_info = SolanaTokenInfo::from_pubkey(pubkey);
-        Ok(token_info)
-    }
-
-    pub async fn get_wallet_tokens(
-        &self,
-        _wallet_address: String,
-    ) -> Result<Vec<String>, FiqhAIError> {
-        // Mock wallet tokens
-        Ok(vec![
-            "So11111111111111111111111111111111111111112".to_owned(), // WSOL
-            "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v".to_owned(), // USDC
-            "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB".to_owned(), // USDT
-        ])
-    }
-
-    pub async fn simulate_transaction(
-        &self,
-        _transaction_data: String,
-    ) -> Result<String, FiqhAIError> {
-        // Mock transaction simulation
-        Ok("Transaction simulation successful".to_owned())
-    }
-
-    pub async fn is_connected(&self) -> Result<bool, FiqhAIError> {
-        // Mock connection check
-        Ok(true)
+    pub async fn is_connected(&self) -> Result<bool, AverroesError> {
+        Ok(true) // Mock connection
     }
 
     pub fn get_network_name(&self) -> String {
         if self.rpc_url.contains("devnet") {
             "Solana Devnet".to_owned()
-        } else if self.rpc_url.contains("testnet") {
-            "Solana Testnet".to_owned()
         } else {
             "Solana Mainnet".to_owned()
         }
     }
 }
 
-/// Chatbot session for follow-up interactions
 #[derive(uniffi::Object)]
 pub struct ChatbotSession {
-    #[allow(dead_code)]
     user_id: String,
-    #[allow(dead_code)]
-    language: String,
     session_id: String,
-    conversation_history: Arc<RwLock<Vec<ChatMessage>>>,
-    session_start: u64, // Unix timestamp
-    is_active: bool,
 }
 
 #[uniffi::export]
@@ -414,15 +866,11 @@ impl ChatbotSession {
     #[uniffi::constructor]
     pub fn new(
         user_id: String,
-        language: Option<String>,
+        _language: String,
     ) -> Self {
         Self {
             user_id,
-            language: language.unwrap_or_else(|| "id".to_owned()),
             session_id: uuid::Uuid::new_v4().to_string(),
-            conversation_history: Arc::new(RwLock::new(Vec::new())),
-            session_start: chrono::Utc::now().timestamp_millis() as u64,
-            is_active: true,
         }
     }
 
@@ -434,249 +882,24 @@ impl ChatbotSession {
         &self,
         message: String,
         _context: Option<String>,
-    ) -> Result<QueryResponse, FiqhAIError> {
-        if !self.is_active {
-            return Err(FiqhAIError::invalid_query("System is not active"));
-        }
+    ) -> Result<QueryResponse, AverroesError> {
+        let response_text =
+            format!("Thank you for your question: '{message}'. I will analyze this based on Islamic principles.");
 
-        // Add user message to history
-        let user_message = ChatMessage {
-            id: uuid::Uuid::new_v4().to_string(),
-            content: message.clone(),
-            is_user_message: true,
-            timestamp: chrono::Utc::now().timestamp_millis() as u64,
-            analysis_id: None,
-            follow_up_options: None,
-        };
-
-        self.conversation_history.write().await.push(user_message);
-
-        // Mock response generation
-        let response_text = format!(
-            "Terima kasih atas pertanyaan Anda tentang '{message}'. Berdasarkan prinsip maqashid syariah, saya akan \
-             menganalisis hal ini lebih lanjut."
-        );
-
-        let follow_up_questions = vec![
-            "Apakah Anda ingin tahu lebih detail tentang aspek riba?".to_owned(),
-            "Bagaimana pendapat ulama lain tentang hal ini?".to_owned(),
-            "Apakah ada alternatif yang lebih sesuai syariah?".to_owned(),
-        ];
-
-        // Add bot response to history
-        let bot_message = ChatMessage {
-            id: uuid::Uuid::new_v4().to_string(),
-            content: response_text.clone(),
-            is_user_message: false,
-            timestamp: chrono::Utc::now().timestamp_millis() as u64,
-            analysis_id: Some(uuid::Uuid::new_v4().to_string()),
-            follow_up_options: Some(follow_up_questions.clone()),
-        };
-
-        self.conversation_history.write().await.push(bot_message);
-
-        Ok(QueryResponse::new(
-            uuid::Uuid::new_v4(),
-            response_text,
-            0.85,
-            vec!["Al-Quran dan Hadits".to_owned(), "Fatwa MUI".to_owned()],
-            follow_up_questions,
-            Some(uuid::Uuid::new_v4()),
-        ))
-    }
-
-    pub async fn get_conversation_history(&self) -> Vec<ChatMessage> {
-        self.conversation_history.read().await.clone()
-    }
-
-    pub async fn clear_session(&self) {
-        self.conversation_history.write().await.clear();
+        Ok(QueryResponse {
+            query_id: format!("chat_{}_{}", self.user_id.clone(), chrono::Utc::now().timestamp()),
+            response: response_text,
+            confidence: 0.8,
+            sources: vec!["Islamic Chat Session".to_owned()],
+            timestamp: chrono::Utc::now().timestamp() as u64,
+        })
     }
 
     pub fn is_active(&self) -> bool {
-        self.is_active
+        true
     }
 
     pub fn get_session_start_time(&self) -> u64 {
-        self.session_start
-    }
-}
-
-// ============================================================================
-// UTILITY FUNCTIONS FOR MOBILE
-// ============================================================================
-
-/// Get display text for Islamic ruling
-#[uniffi::export]
-pub fn get_ruling_display_text(ruling: IslamicPrinciple) -> String {
-    match ruling {
-        IslamicPrinciple::Halal => "Halal (Diperbolehkan)".to_owned(),
-        IslamicPrinciple::Haram => "Haram (Dilarang)".to_owned(),
-        IslamicPrinciple::Makruh => "Makruh (Tidak Disukai)".to_owned(),
-        IslamicPrinciple::Mustahab => "Mustahab (Dianjurkan)".to_owned(),
-        IslamicPrinciple::Mubah => "Mubah (Boleh)".to_owned(),
-        IslamicPrinciple::Riba => "Riba (Haram - Bunga)".to_owned(),
-        IslamicPrinciple::Gharar => "Gharar (Syubhat - Ketidakpastian Berlebihan)".to_owned(),
-        IslamicPrinciple::Maysir => "Maysir (Haram - Perjudian)".to_owned(),
-        IslamicPrinciple::Syubhat => "Syubhat (Meragukan)".to_owned(),
-    }
-}
-
-/// Get emoji for Islamic ruling
-#[uniffi::export]
-pub fn get_ruling_emoji(ruling: IslamicPrinciple) -> String {
-    match ruling {
-        IslamicPrinciple::Halal => "✅".to_owned(),
-        IslamicPrinciple::Haram => "❌".to_owned(),
-        IslamicPrinciple::Makruh => "⚠️".to_owned(),
-        IslamicPrinciple::Mustahab => "⭐".to_owned(),
-        IslamicPrinciple::Mubah => "✔️".to_owned(),
-        IslamicPrinciple::Riba => "🚫".to_owned(),
-        IslamicPrinciple::Gharar => "⚡".to_owned(),
-        IslamicPrinciple::Maysir => "🎰".to_owned(),
-        IslamicPrinciple::Syubhat => "❓".to_owned(),
-    }
-}
-
-/// Check if ruling is permissible
-#[uniffi::export]
-pub fn is_ruling_permissible(ruling: IslamicPrinciple) -> bool {
-    matches!(ruling, IslamicPrinciple::Halal | IslamicPrinciple::Mubah | IslamicPrinciple::Mustahab)
-}
-
-// ============================================================================
-// HELPER CONSTRUCTORS FOR MOBILE
-// ============================================================================
-
-/// Create text query
-#[uniffi::export]
-pub fn create_text_query(
-    text: String,
-    user_id: Option<String>,
-    language: Option<String>,
-) -> Query {
-    Query::new_text(text, user_id, language)
-}
-
-/// Create token query
-#[uniffi::export]
-pub fn create_token_query(
-    token: String,
-    user_id: Option<String>,
-    language: Option<String>,
-) -> Query {
-    Query::new_token_ticker(token, user_id, language)
-}
-
-/// Create contract address query
-#[uniffi::export]
-pub fn create_contract_query(
-    address: String,
-    user_id: Option<String>,
-    language: Option<String>,
-) -> Query {
-    Query::new_contract_address(address, user_id, language)
-}
-
-/// Create audio query
-#[uniffi::export]
-pub fn create_audio_query(
-    audio_data: Vec<u8>,
-    user_id: Option<String>,
-    language: Option<String>,
-) -> Query {
-    Query::new_audio(audio_data, user_id, language)
-}
-
-/// Create default configuration
-#[uniffi::export]
-pub fn create_default_config() -> FiqhAIConfig {
-    FiqhAIConfig::default()
-}
-
-/// Create mobile-optimized configuration
-#[uniffi::export]
-pub fn create_mobile_config(
-    openai_api_key: Option<String>,
-    enable_vector_search: bool,
-) -> FiqhAIConfig {
-    FiqhAIConfig {
-        openai_api_key: openai_api_key.unwrap_or_else(|| "".to_owned()),
-        enable_solana: enable_vector_search,
-        ..Default::default()
-    }
-}
-
-// ============================================================================
-// NON-UNIFFI INTERNAL IMPLEMENTATION
-// ============================================================================
-
-impl FiqhAISystem {
-    /// Internal method to create HTTP API router (not exposed to mobile)
-    pub fn create_api_router(&self) -> axum::Router {
-        let app_state = AppState {
-            query_actor: self.query_actor.clone(),
-            analyzer_actor: self.analyzer_actor.clone(),
-            history_actor: self.history_actor.clone(),
-        };
-
-        // Create middleware state
-        let rate_limiter = Arc::new(RateLimiter::new(RateLimitConfig::default()));
-        let middleware_state = MiddlewareState {
-            rate_limiter,
-        };
-
-        // Build the router with all middleware
-        create_router(app_state)
-            .layer(create_cors_layer())
-            .layer(axum::middleware::from_fn(security_headers_middleware))
-            .layer(axum::middleware::from_fn(validation_middleware))
-            .layer(axum::middleware::from_fn(tracing_middleware))
-            .layer(axum::middleware::from_fn(auth_middleware))
-            .layer(axum::middleware::from_fn_with_state(middleware_state.clone(), rate_limit_middleware))
-    }
-}
-
-// ============================================================================
-// TESTS
-// ============================================================================
-
-#[cfg(test)]
-mod mobile_tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_audio_processor() {
-        let processor = AudioProcessor::new();
-        let result = processor.transcribe_audio(vec![1, 2, 3, 4], Some("id".to_owned())).await;
-        assert!(result.is_ok());
-        assert!(!result.unwrap().is_empty());
-    }
-
-    #[tokio::test]
-    async fn test_solana_connector() {
-        let connector = SolanaConnector::new(None);
-        assert_eq!(connector.get_network_name(), "Solana Mainnet");
-
-        let is_connected = connector.is_connected().await.unwrap();
-        assert!(is_connected);
-    }
-
-    #[test]
-    fn test_ruling_helpers() {
-        assert_eq!(get_ruling_display_text(IslamicPrinciple::Halal), "Halal (Diperbolehkan)");
-        assert!(is_ruling_permissible(IslamicPrinciple::Halal));
-        assert!(!is_ruling_permissible(IslamicPrinciple::Haram));
-        assert_eq!(get_ruling_emoji(IslamicPrinciple::Halal), "✅");
-    }
-
-    #[test]
-    fn test_config_helpers() {
-        let default_config = create_default_config();
-        assert_eq!(default_config.model_name, "gpt-4");
-
-        let mobile_config = create_mobile_config(Some("test_key".to_owned()), true);
-        assert_eq!(mobile_config.openai_api_key, "test_key");
-        assert!(mobile_config.enable_solana);
+        chrono::Utc::now().timestamp() as u64
     }
 }

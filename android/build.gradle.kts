@@ -4,8 +4,9 @@ plugins {
     id("com.android.library") version "8.5.0" apply false
     id("org.jetbrains.kotlin.android") version "2.0.0" apply false
     id("org.jetbrains.kotlin.plugin.compose") version "2.0.0" apply false
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.0.0" apply false
     id("com.github.willir.rust.cargo-ndk-android") version "0.3.4" apply false
+    id("com.google.devtools.ksp") version "2.0.0-1.0.23" apply false
 }
-val ndkVersion by extra("29.0.13599879 rc2")
 
- 
+val ndkVersion by extra("29.0.13599879 rc2")

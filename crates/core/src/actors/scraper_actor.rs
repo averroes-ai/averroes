@@ -30,7 +30,7 @@ pub struct ScraperActor {
 impl ScraperActor {
     pub fn new(receiver: mpsc::Receiver<ScraperMessage>) -> Self {
         let client = Client::builder()
-            .user_agent("FiqhAI/1.0 Islamic Token Analyzer")
+            .user_agent("Averroes/1.0 Islamic Token Analyzer")
             .timeout(Duration::from_secs(30))
             .build()
             .expect("Failed to create HTTP client");

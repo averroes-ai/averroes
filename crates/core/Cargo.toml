@@ -1,5 +1,5 @@
 [package]
-name = "fiqh_core"
+name = "averroes_core"
 version = "0.1.0"
 repository.workspace = true
 license.workspace = true
@@ -9,9 +9,20 @@ workspace = "../.."
 # Add library types for mobile bindings
 [lib]
 crate-type = ["lib", "staticlib", "cdylib"]
-name = "fiqh_core"
+name = "averroes_core"
+
+# UniFFI bindgen binary (required for code generation)
+[[bin]]
+name = "uniffi-bindgen"
+path = "uniffi-bindgen.rs"
 
 [dependencies]
+# Logging  
+log = "0.4"
+
+# AI framework with Groq support (latest version - no features needed)
+rig-core = "0.15.1"
+
 # Core async runtime
 tokio.workspace = true
 crossbeam.workspace = true
@@ -30,20 +41,24 @@ anyhow.workspace = true
 thiserror.workspace = true
 
 # HTTP client and scraping
-reqwest.workspace = true
+reqwest = { workspace = true, default-features = false, features = [
+    "rustls-tls",
+    "json",
+] }
 scraper = "0.23.1"
 select = "0.6.0"
 
 # Time and URLs
-chrono.workspace = true
+chrono = { version = "0.4", features = ["serde"] }
 url.workspace = true
 urlencoding.workspace = true
 
 # AI and ML dependencies (core functionality)
-rig-core = { version = "0.0.6", optional = true }
 # Removed langchain-rust - not needed, rig-core provides everything!
-qdrant-client = { version = "1.10.0", features = ["serde"], optional = true }
-openai-api-rs = { version = "6.0.7", optional = true }
+qdrant-client = { version = "1.10.0", default-features = false, features = [
+    "serde",
+], optional = true }
+openai-api-rs = { version = "6.0.7", default-features = false, optional = true }
 tiktoken-rs = { version = "0.7.0", optional = true }
 
 # Vector operations and embeddings
@@ -56,13 +71,16 @@ candle-nn = { version = "0.9.1", optional = true }
 rodio = { version = "0.21.1", optional = true }
 cpal = { version = "0.16.0", optional = true }
 
-# Solana SDK - Made optional for feature gating
-solana-client = { workspace = true, optional = true }
-solana-program = { workspace = true, optional = true }
-solana-account-decoder = { workspace = true, optional = true }
-solana-pubkey = { workspace = true, optional = true }
-solana-transaction = { workspace = true, optional = true }
-spl-token = { workspace = true, optional = true }
+# Solana SDK - Made optional for feature gating and Android compatibility
+solana-client = { version = "2.2", default-features = false }
+solana-program = { version = "2.2", default-features = false }
+solana-account-decoder = { version = "2.2", default-features = false }
+solana-pubkey = { version = "2.2", default-features = false, features = [
+    "serde",
+    "borsh",
+] }
+solana-transaction = { version = "2.2", default-features = false }
+spl-token = { version = "8.0.0", default-features = false }
 
 # Web API framework
 axum.workspace = true
@@ -79,7 +97,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 # Utilities
-uuid.workspace = true
+uuid = { version = "1.0", features = ["v4", "serde"] }
 rand.workspace = true
 
 # UniFFI for mobile bindings
@@ -102,32 +120,18 @@ wiremock = "0.6.0"
 
 # Mobile-specific features
 [features]
-default = ["mobile", "ai", "solana"]
+default = ["mobile", "ai"]
 mobile = ["uniffi"]
-ai = ["rig-core", "qdrant-client", "openai-api-rs", "tiktoken-rs"]
-solana = [
-    "solana-client",
-    "solana-program",
-    "solana-account-decoder",
-    "solana-pubkey",
-    "solana-transaction",
-    "spl-token",
-]
+ai = ["openai-api-rs", "tiktoken-rs"] # Only optional AI dependencies
 audio = ["rodio", "cpal"]
-# Add vendored feature for Android builds
-vendored = []
 
+# Build dependencies only for non-Android targets
 [build-dependencies]
 uniffi = { version = "0.29.3", features = ["build"] }
-openssl-sys = { version = "0.9", features = ["vendored"] }
-
-# Add uniffi-bindgen binary to the same crate (Mozilla's single-crate approach)
-[[bin]]
-name = "uniffi-bindgen"
-path = "src/bin/uniffi-bindgen.rs"
 
 # Android-specific dependencies to avoid cross-compilation issues
 [target.'cfg(target_os = "android")'.dependencies]
+# Remove OpenSSL dependencies for Android to avoid atomic linking issues
 openssl.workspace = true
 native-tls.workspace = true
 

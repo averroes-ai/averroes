@@ -10,7 +10,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing
     init();
 
-    info!("🌐 Starting FiqhAI Web Server");
+    info!("🌐 Starting Averroes Web Server");
 
     // Create router with basic UI
     let app = Router::new().route("/", get(home_page)).route("/health", get(health_check));
@@ -35,7 +35,7 @@ async fn home_page() -> Html<&'static str> {
     <!DOCTYPE html>
     <html>
     <head>
-        <title>FiqhAI - Islamic Token Advisor</title>
+        <title>Averroes - Islamic Token Advisor</title>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
@@ -50,9 +50,9 @@ async fn home_page() -> Html<&'static str> {
     </head>
     <body>
         <div class="container">
-            <h1>🕌 FiqhAI - Islamic Token Advisor</h1>
+            <h1>🕌 Averroes - Islamic Token Advisor</h1>
             <div class="status">✅ Web Server Running</div>
-            <p>Welcome to FiqhAI, your Islamic finance advisor for cryptocurrency analysis according to Sharia principles.</p>
+            <p>Welcome to Averroes, your Islamic finance advisor for cryptocurrency analysis according to Sharia principles.</p>
             <p><strong>Features:</strong></p>
             <ul>
                 <li>🔍 Token Analysis according to Maqashid Syariah</li>

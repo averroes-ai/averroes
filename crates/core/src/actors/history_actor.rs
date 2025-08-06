@@ -38,9 +38,24 @@ impl HistoryActor {
         receiver: mpsc::Receiver<HistoryMessage>,
         db_path: Option<String>,
     ) -> Result<Self, HistoryError> {
-        let db_path = db_path.unwrap_or_else(|| "fiqh_history.db".to_owned());
-
-        let db = sled::open(db_path).map_err(|e| HistoryError::DatabaseError(e.to_string()))?;
+        // For Android or when no path is provided, use in-memory database
+        let db = if let Some(path) = db_path {
+            // Try to create the database at the specified path
+            sled::open(&path)
+                .or_else(|e| {
+                    warn!("Failed to create database at {}: {}. Using in-memory database.", path, e);
+                    // Fall back to in-memory database
+                    sled::Config::new().temporary(true).open()
+                })
+                .map_err(|e| HistoryError::DatabaseError(e.to_string()))?
+        } else {
+            // Use in-memory database when no path is specified
+            info!("Using in-memory database for history storage");
+            sled::Config::new()
+                .temporary(true)
+                .open()
+                .map_err(|e| HistoryError::DatabaseError(e.to_string()))?
+        };
 
         let analyses_tree = db
             .open_tree("analyses")
@@ -595,24 +610,21 @@ pub async fn spawn_history_actor(db_path: Option<String>) -> Result<crate::model
 
 #[cfg(test)]
 mod tests {
-    use tempfile::TempDir;
 
     use super::*;
 
     #[tokio::test]
     async fn test_history_actor_creation() {
-        let temp_dir = TempDir::new().unwrap();
-        let db_path = temp_dir.path().join("test.db");
-        let result = spawn_history_actor(Some(db_path.to_string_lossy().to_string())).await;
+        // Use in-memory database for tests
+        let result = spawn_history_actor(None).await;
         assert!(result.is_ok());
     }
 
     #[tokio::test]
     async fn test_token_extraction() {
         let (_sender, receiver) = mpsc::channel(10);
-        let temp_dir = TempDir::new().unwrap();
-        let db_path = temp_dir.path().join("test.db");
-        let actor = HistoryActor::new(receiver, Some(db_path.to_string_lossy().to_string())).unwrap();
+        // Use in-memory database for tests
+        let actor = HistoryActor::new(receiver, None).unwrap();
 
         let result = actor.extract_token_from_text("What is BTC price?");
         assert_eq!(result, Some("BTC".to_owned()));
@@ -621,9 +633,8 @@ mod tests {
     #[tokio::test]
     async fn test_frequency_calculation() {
         let (_sender, receiver) = mpsc::channel(10);
-        let temp_dir = TempDir::new().unwrap();
-        let db_path = temp_dir.path().join("test.db");
-        let _actor = HistoryActor::new(receiver, Some(db_path.to_string_lossy().to_string())).unwrap();
+        // Use in-memory database for tests
+        let _actor = HistoryActor::new(receiver, None).unwrap();
 
         let query_times = [1u64, 2u64, 3u64]; // Mock timestamps
 

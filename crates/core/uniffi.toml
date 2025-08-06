@@ -1,11 +1,11 @@
 [bindings.kotlin]
-package_name = "com.rizilab.fiqhadvisor.fiqhcore"
-cdylib_name = "fiqhai_core"
+package_name = "com.rizilab.averroes.averroescore"
+cdylib_name = "averroes_core"
 generate_immutable_records = true
 
 [bindings.swift]
-module_name = "FiqhAICore"
-ffi_module_name = "FiqhAICoreFFI"
-ffi_module_filename = "fiqhaicore"
+module_name = "AverroesCore"
+ffi_module_name = "AverroesCoreFFI"
+ffi_module_filename = "averroescore"
 generate_immutable_records = true
 omit_argument_labels = false
